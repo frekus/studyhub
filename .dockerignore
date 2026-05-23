@@ -1,0 +1,22 @@
+# Dependencies
+**/node_modules
+
+# Build output
+**/dist
+**/.next
+**/coverage
+
+# Environment secrets — never bake these into the image
+.env
+.env.*
+.env.local
+
+# Dev tooling
+.git
+.gitignore
+.turbo
+**/*.log
+
+# OS artefacts
+.DS_Store
+Thumbs.db

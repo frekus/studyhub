@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Background -->
+  <rect width="32" height="32" rx="7" fill="#071A18"/>
+
+  <!-- Left page of open book -->
+  <path d="M5 10 C5 9 6 8 7 8 L14.5 8 L14.5 24 L7 24 C6 24 5 23 5 22 Z" fill="#0D9488"/>
+
+  <!-- Right page of open book -->
+  <path d="M27 10 C27 9 26 8 25 8 L17.5 8 L17.5 24 L25 24 C26 24 27 23 27 22 Z" fill="#14B8A7"/>
+
+  <!-- Spine -->
+  <rect x="14" y="7.5" width="4" height="17" rx="1" fill="#0A7A70"/>
+
+  <!-- Text lines — left page -->
+  <rect x="7" y="12" width="5.5" height="1.2" rx="0.6" fill="white" opacity="0.45"/>
+  <rect x="7" y="15" width="5.5" height="1.2" rx="0.6" fill="white" opacity="0.45"/>
+  <rect x="7" y="18" width="4"   height="1.2" rx="0.6" fill="white" opacity="0.45"/>
+
+  <!-- Text lines — right page -->
+  <rect x="19.5" y="12" width="5.5" height="1.2" rx="0.6" fill="white" opacity="0.45"/>
+  <rect x="19.5" y="15" width="5.5" height="1.2" rx="0.6" fill="white" opacity="0.45"/>
+  <rect x="19.5" y="18" width="4"   height="1.2" rx="0.6" fill="white" opacity="0.45"/>
+
+  <!-- AI spark — top-right accent -->
+  <circle cx="26" cy="6" r="3" fill="#071A18"/>
+  <path d="M26 3.5 L26.5 5.5 L28.5 6 L26.5 6.5 L26 8.5 L25.5 6.5 L23.5 6 L25.5 5.5 Z" fill="#14B8A7"/>
+</svg>

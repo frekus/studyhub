@@ -1,0 +1,115 @@
+@import "tailwindcss";
+@plugin "tailwindcss-animate";
+
+/* Class-based dark mode: applies dark: variants when .dark is on an ancestor */
+@variant dark (&:where(.dark, .dark *));
+
+/* Map Tailwind utilities to CSS variables so they switch with the theme */
+@theme inline {
+  --color-background:         var(--background);
+  --color-foreground:         var(--foreground);
+  --color-card:               var(--card);
+  --color-card-foreground:    var(--card-foreground);
+  --color-border:             var(--border);
+  --color-input:              var(--input);
+  --color-muted:              var(--muted);
+  --color-muted-foreground:   var(--muted-foreground);
+  --color-primary:            var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary:          var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-destructive:        var(--destructive);
+  --color-ring:               var(--ring);
+  --color-accent:             var(--accent);
+  --color-accent-foreground:  var(--accent-foreground);
+  --color-success:            var(--success);
+
+  /*
+   * Remap orange-* to the teal accent so every existing utility that used
+   * orange (text-orange-400, bg-orange-500/20, border-orange-400/30, etc.)
+   * automatically renders in teal without touching any component.
+   */
+  --color-orange-300: var(--accent);
+  --color-orange-400: var(--accent);
+  --color-orange-500: var(--accent);
+  --color-orange-600: var(--accent-hover);
+
+  --font-sans: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* ── Light mode ────────────────────────────────────────────────────────── */
+:root {
+  --background:              #F0FAFA;
+  --foreground:              #071A18;
+  --card:                    #FFFFFF;
+  --card-foreground:         #071A18;
+  --border:                  #B2DFDB;
+  --input:                   #E0F5F3;
+  --muted:                   #E0F5F3;
+  --muted-foreground:        #4A6B67;
+  --primary:                 #0D9488;
+  --primary-foreground:      #FFFFFF;
+  --secondary:               #E0F5F3;
+  --secondary-foreground:    #071A18;
+  --accent:                  #0D9488;
+  --accent-hover:            #0A7A70;
+  --accent-foreground:       #FFFFFF;
+  --destructive:             #EF4444;
+  --ring:                    #0D9488;
+  --success:                 #10B981;
+}
+
+/* ── Dark mode ─────────────────────────────────────────────────────────── */
+.dark {
+  --background:              #071A18;
+  --foreground:              #F0FAFA;
+  --card:                    #0D2B27;
+  --card-foreground:         #F0FAFA;
+  --border:                  #286A63;
+  --input:                   #0A2420;
+  --muted:                   #0A2420;
+  --muted-foreground:        #95A3A1;
+  --primary:                 #14B8A7;
+  --primary-foreground:      #071A18;
+  --secondary:               #0A524C;
+  --secondary-foreground:    #F0FAFA;
+  --accent:                  #14B8A7;
+  --accent-hover:            #0D9488;
+  --accent-foreground:       #071A18;
+  --destructive:             #EF4444;
+  --ring:                    #14B8A7;
+  --success:                 #10B981;
+}
+
+* {
+  border-color: var(--border);
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+
+/* ── Reusable helpers ──────────────────────────────────────────────────── */
+
+/* Hero radial glow – place as a sibling inside a relative container */
+.hero-glow {
+  background: radial-gradient(ellipse 70% 55% at 50% 40%, rgba(20, 184, 167, 0.18) 0%, transparent 70%);
+}
+
+/* Subtle teal grid overlay */
+.bg-grid {
+  background-image:
+    linear-gradient(rgba(20, 184, 167, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(20, 184, 167, 0.06) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+
+/* Glassmorphism card base */
+.glass {
+  background: rgba(13, 43, 39, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(40, 106, 99, 0.55);
+}

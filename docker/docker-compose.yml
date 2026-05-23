@@ -1,0 +1,113 @@
+services:
+  # ---------------------------------------------------------------------------
+  # Infrastructure
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: studyhub
+      POSTGRES_PASSWORD: studyhub
+      POSTGRES_DB: studyhub
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - studyhub-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U studyhub"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: studyhub
+      RABBITMQ_DEFAULT_PASS: studyhub
+    ports:
+      - "5672:5672"
+      - "15672:15672"  # Management UI → http://localhost:15672
+    networks:
+      - studyhub-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - studyhub-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ---------------------------------------------------------------------------
+  # Applications
+  # ---------------------------------------------------------------------------
+  studyhub-web:
+    build:
+      context: ..              # monorepo root — Dockerfile needs the full workspace
+      dockerfile: apps/web/Dockerfile
+    ports:
+      - "3000:3000"
+    env_file:
+      - ../.env.local          # secrets (Supabase keys, etc.) — never commit this file
+    environment:
+      # These override/supplement env_file values.
+      # Service-name hostnames are resolved by Docker's internal DNS.
+      - RABBITMQ_URL=amqp://studyhub:studyhub@rabbitmq:5672
+      - REDIS_URL=redis://redis:6379
+      # Pass-through: values come from env_file (no = means "inherit from env_file")
+      - NEXT_PUBLIC_SUPABASE_URL
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY
+      - SUPABASE_SERVICE_ROLE_KEY
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - studyhub-network
+    restart: unless-stopped
+
+  studyhub-worker:
+    build:
+      context: ..
+      dockerfile: apps/worker/Dockerfile
+    env_file:
+      - ../.env.local
+    environment:
+      - RABBITMQ_URL=amqp://studyhub:studyhub@rabbitmq:5672
+      - REDIS_URL=redis://redis:6379
+      - SUPABASE_URL
+      - SUPABASE_SERVICE_ROLE_KEY
+      - ANTHROPIC_API_KEY
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - studyhub-network
+    restart: unless-stopped
+
+networks:
+  studyhub-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
