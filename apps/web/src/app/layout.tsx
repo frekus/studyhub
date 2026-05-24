@@ -12,6 +12,9 @@ const dmSans = DM_Sans({
 export const metadata: Metadata = {
   title: "StudyHub",
   description: "Your personal study companion",
+  verification: {
+    google: "rvrPE1oLFCY4x4C-GdNi8_NtXpL7SEzXRpxeoNUbru0",
+  },
 };
 
 export const viewport: Viewport = {
