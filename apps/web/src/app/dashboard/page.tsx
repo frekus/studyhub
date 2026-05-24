@@ -121,103 +121,16 @@ function UpgradeModal({ open, message, onClose }: { open: boolean; message: stri
   );
 }
 
-// ---------------------------------------------------------------------------
-// FlipCard
-// ---------------------------------------------------------------------------
-
-function FlipCard({ card }: { card: Flashcard }) {
-  const [flipped, setFlipped] = useState(false);
-  return (
-    <div
-      className="cursor-pointer perspective-[700px]"
-      onClick={() => setFlipped((v) => !v)}
-      role="button"
-      aria-label={flipped ? "Show question" : "Show answer"}
-    >
-      <div
-        className="relative h-36 transition-transform duration-500 transform-3d"
-        style={{ transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)" }}
-      >
-        <div className="absolute inset-0 flex flex-col items-center justify-center rounded-lg border border-border bg-card p-4 backface-hidden">
-          <p className="text-center text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">Question</p>
-          <p className="text-center text-sm font-medium">{card.question}</p>
-        </div>
-        <div className="absolute inset-0 flex flex-col items-center justify-center rounded-lg border border-orange-500/30 bg-orange-500/10 p-4 backface-hidden transform-[rotateY(180deg)]">
-          <p className="text-center text-xs font-medium uppercase tracking-wide text-orange-400 mb-2">Answer</p>
-          <p className="text-center text-sm text-foreground">{card.answer}</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// FlashcardsModal
-// ---------------------------------------------------------------------------
-
-function FlashcardsModal({ note, flashcards, loading, onOpen }: { note: Note; flashcards: Flashcard[] | undefined; loading: boolean; onOpen: (id: string) => void }) {
-  const [open, setOpen] = useState(false);
-
-  function handleOpenChange(next: boolean) {
-    setOpen(next);
-    if (next) onOpen(note.id);
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-1.5">
-          <Layers className="h-3.5 w-3.5" />
-          Flashcards
-          {flashcards && flashcards.length > 0 && (
-            <span className="ml-0.5 rounded-full bg-orange-500/20 px-1.5 py-0.5 text-xs text-orange-400">
-              {flashcards.length}
-            </span>
-          )}
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-h-[90vh] max-w-xl flex flex-col p-0">
-        <div className="flex-shrink-0 px-6 pt-6 pb-2">
-          <DialogHeader>
-            <DialogTitle className="truncate pr-6">{note.title} — Flashcards</DialogTitle>
-          </DialogHeader>
-        </div>
-        <div
-          className="overflow-y-auto flex-1 px-6 pb-6 overscroll-contain"
-          style={{ WebkitOverflowScrolling: "touch" }}
-        >
-          {loading ? (
-            <div className="flex items-center gap-2 py-8 justify-center text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /><span className="text-sm">Loading…</span>
-            </div>
-          ) : !flashcards || flashcards.length === 0 ? (
-            <div className="flex items-center gap-2 py-8 justify-center text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /><span className="text-sm">Generating flashcards…</span>
-            </div>
-          ) : (
-            <>
-              <p className="mb-4 text-xs text-muted-foreground">Click a card to flip it and reveal the answer.</p>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {flashcards.map((card) => <FlipCard key={card.id} card={card} />)}
-              </div>
-            </>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // NoteCard
 // ---------------------------------------------------------------------------
 
-function NoteCard({ note, flashcards, flashcardsLoading, onDelete, onLoadFlashcards }: {
+function NoteCard({ note, flashcardCount, onDelete, onStudy }: {
   note: Note;
-  flashcards: Flashcard[] | undefined;
-  flashcardsLoading: boolean;
+  flashcardCount: number | undefined;
   onDelete: (id: string) => void;
-  onLoadFlashcards: (id: string) => void;
+  onStudy: (noteId: string, noteTitle: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -261,7 +174,15 @@ function NoteCard({ note, flashcards, flashcardsLoading, onDelete, onLoadFlashca
         <>
           <p className="mt-3 rounded-md bg-orange-500/10 px-3 py-2 text-sm text-orange-400">{note.ai_summary}</p>
           <div className="mt-3">
-            <FlashcardsModal note={note} flashcards={flashcards} loading={flashcardsLoading} onOpen={onLoadFlashcards} />
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => onStudy(note.id, note.title)}>
+              <Layers className="h-3.5 w-3.5" />
+              Flashcards
+              {flashcardCount !== undefined && flashcardCount > 0 && (
+                <span className="ml-0.5 rounded-full bg-orange-500/20 px-1.5 py-0.5 text-xs text-orange-400">
+                  {flashcardCount}
+                </span>
+              )}
+            </Button>
           </div>
         </>
       ) : (
@@ -566,6 +487,14 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
   const [cancelSubOpen, setCancelSubOpen]         = useState(false);
   const [cancellingSub, setCancellingSub] = useState(false);
 
+  // Study mode state
+  const [studyMode, setStudyMode]               = useState(false);
+  const [studyFlashcards, setStudyFlashcards]   = useState<Flashcard[]>([]);
+  const [studyNoteTitle, setStudyNoteTitle]     = useState("");
+  const [studyLoading, setStudyLoading]         = useState(false);
+  const [currentCard, setCurrentCard]           = useState(0);
+  const [flipped, setFlipped]                   = useState(false);
+
   // Exam upload form state
   const [examTitle, setExamTitle]         = useState("");
   const [examFile, setExamFile]           = useState<File | null>(null);
@@ -735,6 +664,29 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
     setNotes((prev) => prev.filter((n) => n.id !== id));
     setFlashcardsMap((prev) => { const next = { ...prev }; delete next[id]; return next; });
   }
+
+  async function openStudyMode(noteId: string, noteTitle: string) {
+    setStudyNoteTitle(noteTitle);
+    setCurrentCard(0);
+    setFlipped(false);
+    setStudyMode(true);
+    const cached = flashcardsMap[noteId];
+    if (cached && cached.length > 0) {
+      setStudyFlashcards(cached);
+      return;
+    }
+    setStudyLoading(true);
+    try {
+      const res = await fetch(`/api/notes/${noteId}/flashcards`);
+      if (!res.ok) return;
+      const json = await res.json() as { data?: { flashcards: Flashcard[] } };
+      const cards = Array.isArray(json.data?.flashcards) ? json.data.flashcards : [];
+      setStudyFlashcards(cards);
+      setFlashcardsMap((prev) => ({ ...prev, [noteId]: cards }));
+    } finally {
+      setStudyLoading(false);
+    }
+  }
   async function handleExamSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!examFile) { setExamError("Please select a file"); return; }
@@ -776,6 +728,126 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
 
   if (loading) return <div className="flex min-h-screen items-center justify-center bg-background"><p className="text-muted-foreground">Loading…</p></div>;
   if (error)   return <div className="flex min-h-screen items-center justify-center bg-background"><p className="text-destructive">{error}</p></div>;
+
+  // ── Full-screen flashcard study mode ──────────────────────────────────────
+  if (studyMode) {
+    const total = studyFlashcards.length;
+    const card  = studyFlashcards[currentCard];
+
+    return (
+      <div className="fixed inset-0 z-50 flex flex-col bg-background">
+        {/* Header */}
+        <div className="flex flex-shrink-0 items-center justify-between border-b border-border px-4 py-3">
+          <button
+            onClick={() => setStudyMode(false)}
+            className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            ← Back to Notes
+          </button>
+          <span className="text-sm text-muted-foreground">
+            {studyLoading ? "Loading…" : total > 0 ? `${currentCard + 1} / ${total}` : ""}
+          </span>
+          <span className="max-w-[150px] truncate text-sm font-medium">{studyNoteTitle}</span>
+        </div>
+
+        {/* Progress bar */}
+        {!studyLoading && total > 0 && (
+          <div className="h-1 flex-shrink-0 bg-border">
+            <div
+              className="h-1 bg-accent transition-all duration-300"
+              style={{ width: `${((currentCard + 1) / total) * 100}%` }}
+            />
+          </div>
+        )}
+
+        {/* Card area */}
+        <div className="flex flex-1 items-center justify-center p-6">
+          {studyLoading ? (
+            <div className="flex flex-col items-center gap-3 text-muted-foreground">
+              <Loader2 className="h-8 w-8 animate-spin" />
+              <p className="text-sm">Loading flashcards…</p>
+            </div>
+          ) : total === 0 ? (
+            <div className="flex flex-col items-center gap-3 text-muted-foreground">
+              <Loader2 className="h-8 w-8 animate-spin" />
+              <p className="text-sm">Generating flashcards… check back in a moment.</p>
+            </div>
+          ) : (
+            <div
+              onClick={() => setFlipped((v) => !v)}
+              role="button"
+              aria-label={flipped ? "Show question" : "Show answer"}
+              className="flex w-full max-w-lg cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-accent bg-card p-8 shadow-lg shadow-accent/10 transition-all duration-200 active:scale-95"
+              style={{ aspectRatio: "3/2" }}
+            >
+              <span className="mb-4 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                {flipped ? "Answer" : "Question"}
+              </span>
+              <p className="text-center text-lg font-medium leading-relaxed">
+                {flipped ? card?.answer : card?.question}
+              </p>
+              {!flipped && (
+                <span className="mt-6 text-xs text-muted-foreground">Tap to reveal answer</span>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Navigation buttons */}
+        {!studyLoading && total > 0 && (
+          <div className="flex flex-shrink-0 gap-3 px-6 pb-4">
+            <button
+              onClick={() => { setCurrentCard((c) => Math.max(0, c - 1)); setFlipped(false); }}
+              disabled={currentCard === 0}
+              className="flex-1 rounded-xl border border-border py-3 text-sm font-medium transition-colors hover:bg-muted disabled:opacity-30"
+            >
+              ← Previous
+            </button>
+            {!flipped ? (
+              <button
+                onClick={() => setFlipped(true)}
+                className="flex-1 rounded-xl bg-accent py-3 text-sm font-medium text-accent-foreground transition-opacity hover:opacity-90"
+              >
+                Reveal Answer
+              </button>
+            ) : currentCard < total - 1 ? (
+              <button
+                onClick={() => { setCurrentCard((c) => c + 1); setFlipped(false); }}
+                className="flex-1 rounded-xl bg-accent py-3 text-sm font-medium text-accent-foreground transition-opacity hover:opacity-90"
+              >
+                Next Card →
+              </button>
+            ) : (
+              <button
+                onClick={() => { setCurrentCard(0); setFlipped(false); }}
+                className="flex-1 rounded-xl bg-accent py-3 text-sm font-medium text-accent-foreground transition-opacity hover:opacity-90"
+              >
+                Start Over 🎉
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Dot indicators */}
+        {!studyLoading && total > 0 && (
+          <div className="flex flex-shrink-0 justify-center gap-1.5 pb-6">
+            {studyFlashcards.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => { setCurrentCard(i); setFlipped(false); }}
+                aria-label={`Go to card ${i + 1}`}
+                className={cn(
+                  "h-2 rounded-full transition-all duration-200",
+                  i === currentCard ? "w-4 bg-accent" : "w-2 bg-border hover:bg-muted-foreground"
+                )}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+  // ─────────────────────────────────────────────────────────────────────────
 
   function handleOnboardingClose() {
     localStorage.setItem("studyhub_onboarding_complete", "1");
@@ -939,10 +1011,9 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
                   <NoteCard
                     key={note.id}
                     note={note}
-                    flashcards={flashcardsMap[note.id]}
-                    flashcardsLoading={fetchingFlashcards.has(note.id)}
+                    flashcardCount={flashcardsMap[note.id]?.length}
                     onDelete={handleNoteDeleted}
-                    onLoadFlashcards={loadFlashcards}
+                    onStudy={openStudyMode}
                   />
                 ))}
               </div>
