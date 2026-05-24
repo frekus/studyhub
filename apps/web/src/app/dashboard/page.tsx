@@ -176,11 +176,16 @@ function FlashcardsModal({ note, flashcards, loading, onOpen }: { note: Note; fl
           )}
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-xl">
-        <DialogHeader>
-          <DialogTitle className="truncate pr-6">{note.title} — Flashcards</DialogTitle>
-        </DialogHeader>
-        <div className="mt-2">
+      <DialogContent className="max-h-[90vh] max-w-xl flex flex-col p-0">
+        <div className="flex-shrink-0 px-6 pt-6 pb-2">
+          <DialogHeader>
+            <DialogTitle className="truncate pr-6">{note.title} — Flashcards</DialogTitle>
+          </DialogHeader>
+        </div>
+        <div
+          className="overflow-y-auto flex-1 px-6 pb-6 overscroll-contain"
+          style={{ WebkitOverflowScrolling: "touch" }}
+        >
           {loading ? (
             <div className="flex items-center gap-2 py-8 justify-center text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" /><span className="text-sm">Loading…</span>

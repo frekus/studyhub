@@ -52,6 +52,16 @@ COPY tsconfig.json ./
 COPY packages   ./packages
 COPY apps/web   ./apps/web
 
+ARG NEXT_PUBLIC_SUPABASE_URL
+ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
+ARG NEXT_PUBLIC_APP_URL
+ARG NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY
+
+ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
+ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
+ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
+ENV NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY=$NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY
+
 # 7. Build internal packages in dependency order.
 #    Each produces a dist/ that the Next.js bundler and runtime both need.
 RUN pnpm --filter @studyhub/database build && \
