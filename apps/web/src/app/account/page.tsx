@@ -100,11 +100,11 @@ export default function AccountPage() {
   const [cancelSubOpen, setCancelSubOpen]   = useState(false);
   const [cancellingSub, setCancellingSub]   = useState(false);
   const [toast, setToast]                   = useState("");
-  const toastTimer                          = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toastTimer = useRef<NodeJS.Timeout | undefined>(undefined); | null>(null);
 
   function showToast(msg: string) {
     setToast(msg);
-    clearTimeout(toastTimer.current);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(""), 3000);
   }
 
