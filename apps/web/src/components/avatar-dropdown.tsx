@@ -2,8 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { LayoutDashboard, Settings, CreditCard, LogOut, ChevronDown } from "lucide-react";
+import { LayoutDashboard, Settings, CreditCard, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -12,10 +11,10 @@ interface Props {
 }
 
 export function AvatarDropdown({ email, plan }: Props) {
-  const [open, setOpen]       = useState(false);
-  const containerRef          = useRef<HTMLDivElement>(null);
-  const router                = useRouter();
-  const initial               = email.charAt(0).toUpperCase();
+  const [open, setOpen]           = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const containerRef              = useRef<HTMLDivElement>(null);
+  const initial                   = email.charAt(0).toUpperCase();
 
   // Close on outside click
   useEffect(() => {
@@ -29,9 +28,14 @@ export function AvatarDropdown({ email, plan }: Props) {
   }, []);
 
   async function handleLogout() {
-    await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/");
-    router.refresh();
+    setLoggingOut(true);
+    try {
+      await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+    } catch (e) {
+      console.error("Logout error:", e);
+    } finally {
+      window.location.href = "/";
+    }
   }
 
   return (
@@ -95,10 +99,11 @@ export function AvatarDropdown({ email, plan }: Props) {
           <div className="p-1">
             <button
               onClick={handleLogout}
-              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-destructive transition-colors hover:bg-destructive/10"
+              disabled={loggingOut}
+              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
             >
               <LogOut className="h-4 w-4" />
-              Log out
+              {loggingOut ? "Logging out…" : "Log out"}
             </button>
           </div>
         </div>

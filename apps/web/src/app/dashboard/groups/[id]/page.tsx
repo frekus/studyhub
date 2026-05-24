@@ -184,6 +184,7 @@ export default function GroupDetailPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
   const [leaving, setLeaving]         = useState(false);
+  const [loggingOut, setLoggingOut]   = useState(false);
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState("");
 
@@ -225,8 +226,14 @@ export default function GroupDetailPage() {
   }, [id, router]);
 
   async function handleLogout() {
-    await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/login");
+    setLoggingOut(true);
+    try {
+      await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+    } catch (e) {
+      console.error("Logout error:", e);
+    } finally {
+      window.location.href = "/";
+    }
   }
 
   function handleNoteShared(noteId: string) {
@@ -282,8 +289,9 @@ export default function GroupDetailPage() {
             <Button variant="ghost" size="icon" asChild>
               <Link href="/" aria-label="Home"><Home className="h-4 w-4" /></Link>
             </Button>
-            <Button variant="ghost" size="sm" onClick={handleLogout}>
-              <LogOut className="h-4 w-4" /><span className="hidden sm:inline">Log out</span>
+            <Button variant="ghost" size="sm" onClick={handleLogout} disabled={loggingOut}>
+              <LogOut className="h-4 w-4" />
+              <span className="hidden sm:inline">{loggingOut ? "Logging out…" : "Log out"}</span>
             </Button>
           </div>
         </div>
