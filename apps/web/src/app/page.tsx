@@ -74,7 +74,8 @@ function NavDropdown({ label, children }: { label: string; children: React.React
 // Pricing feature rows
 // ---------------------------------------------------------------------------
 
-const PRICING_ROWS = [
+//const PRICING_ROWS = [
+const PRICING_ROWS: Array<{ label: string; free: string | boolean; popular: string | boolean; pro: string | boolean }> = [
   { label: "Notes per month",          free: "10",       popular: "Unlimited", pro: "Unlimited" },
   { label: "AI summaries per month",   free: "5",        popular: "Unlimited", pro: "Unlimited" },
   { label: "Flashcard sets per month", free: "5",        popular: "Unlimited", pro: "Unlimited" },
@@ -82,7 +83,8 @@ const PRICING_ROWS = [
   { label: "Study groups",             free: false,      popular: true,        pro: true        },
   { label: "Priority support",         free: false,      popular: false,       pro: true        },
   { label: "Early feature access",     free: false,      popular: false,       pro: true        },
-] as const;
+//] as const;
+];
 
 // ---------------------------------------------------------------------------
 // FAQ data
