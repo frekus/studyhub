@@ -305,25 +305,21 @@ export default function LandingPage() {
                   <Link href="/dashboard">Go to Dashboard <ArrowRight className="ml-1.5 h-4 w-4" /></Link>
                 </Button>
               ) : (
-                <div className="flex flex-wrap gap-3">
-                  <Button size="lg" asChild>
-                    <Link href="/signup">Start Free Today <ArrowRight className="ml-1.5 h-4 w-4" /></Link>
-                  </Button>
-                  <Button size="lg" variant="outline" asChild>
-                    <a href="#how-it-works"><Play className="mr-1.5 h-4 w-4" />See How It Works</a>
-                  </Button>
-                </div>
+                <>
+                  <div className="flex flex-wrap gap-3">
+                    <Button size="lg" asChild>
+                      <Link href="/signup">Start for free <ArrowRight className="ml-1.5 h-4 w-4" /></Link>
+                    </Button>
+                    <Button size="lg" variant="outline" asChild>
+                      <Link href="/login"><Play className="mr-1.5 h-4 w-4" />Sign in</Link>
+                    </Button>
+                  </div>
+                  <p className="mt-4 text-sm text-muted-foreground">
+                    No credit card required · Free forever plan
+                  </p>
+                </>
               )}
             </div>
-
-            {/* Trust badges */}
-            <ul className="mt-6 flex flex-wrap gap-x-5 gap-y-2">
-              {["All-in-one study platform", "Built for focused learning", "Designed for better results"].map((item) => (
-                <li key={item} className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                  <Check className="h-3.5 w-3.5 text-orange-400" />{item}
-                </li>
-              ))}
-            </ul>
           </div>
 
           {/* Right — Dashboard mockup */}
