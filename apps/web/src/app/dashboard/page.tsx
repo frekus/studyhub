@@ -123,6 +123,13 @@ function formatDate(iso: string) {
   });
 }
 
+function formatShortDate(iso: string) {
+  return new Date(iso).toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+  });
+}
+
 // ---------------------------------------------------------------------------
 // FolderIcon helper
 // ---------------------------------------------------------------------------
@@ -502,21 +509,21 @@ function StreakWidget({ streak }: { streak: StreakData }) {
   const last14 = streak.activity.slice(-14);
 
   return (
-    <div className="mb-4 rounded-xl border border-border bg-card p-4">
-      <div className="flex items-center justify-between gap-4">
+    <div className="mb-4 rounded-xl border border-border bg-card p-3 sm:p-4">
+      <div className="flex items-center justify-between gap-2 sm:gap-4">
         {/* Left — current streak */}
-        <div className="flex items-center gap-3">
-          <span className={cn("text-3xl leading-none", isPulsing && "animate-pulse")}>
+        <div className="flex items-center gap-2 sm:gap-3">
+          <span className={cn("text-2xl leading-none sm:text-3xl", isPulsing && "animate-pulse")}>
             {fireEmoji}
           </span>
           <div>
-            <p className="text-2xl font-bold leading-none text-orange-400">
+            <p className="text-xl font-bold leading-none text-orange-400 sm:text-2xl">
               {streak.current_streak}
             </p>
             <p className="mt-0.5 text-xs text-muted-foreground">day streak</p>
           </div>
           {streak.studied_today && (
-            <span className="flex items-center gap-1 rounded-full bg-green-500/15 px-2 py-0.5 text-xs text-green-400">
+            <span className="hidden items-center gap-1 rounded-full bg-green-500/15 px-2 py-0.5 text-xs text-green-400 sm:flex">
               <Check className="h-3 w-3" />Today
             </span>
           )}
@@ -540,14 +547,14 @@ function StreakWidget({ streak }: { streak: StreakData }) {
         </div>
 
         {/* Right — stats */}
-        <div className="flex gap-4 text-center">
+        <div className="flex gap-3 text-center sm:gap-4">
           <div>
-            <p className="text-sm font-bold">{streak.longest_streak}</p>
-            <p className="text-xs text-muted-foreground">Best</p>
+            <p className="text-sm font-bold leading-none">{streak.longest_streak}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">Best</p>
           </div>
           <div>
-            <p className="text-sm font-bold">{streak.total_study_days}</p>
-            <p className="text-xs text-muted-foreground">Total days</p>
+            <p className="text-sm font-bold leading-none">{streak.total_study_days}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">Total</p>
           </div>
         </div>
       </div>
@@ -958,13 +965,13 @@ function ExamCard({ exam, onDelete }: { exam: Exam; onDelete: (id: string) => vo
         onCancel={() => setConfirmOpen(false)}
         loading={deleting}
       />
-      <div className="group rounded-xl border border-border/60 border-l-4 border-l-accent bg-card p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg">
-        <div className="flex items-start justify-between gap-3">
+      <div className="group rounded-xl border border-border/60 border-l-4 border-l-accent bg-card p-3 sm:p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg">
+        <div className="flex items-center justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <h3 className="truncate font-semibold">{exam.title}</h3>
-            <p className="mt-0.5 text-xs text-muted-foreground">{formatDate(exam.created_at)}</p>
+            <h3 className="truncate text-sm font-semibold leading-snug">{exam.title}</h3>
+            <p className="mt-0.5 text-xs text-muted-foreground">{formatShortDate(exam.created_at)}</p>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             {exam.status === "pending" && (
               <span className="flex items-center gap-1.5 rounded-full bg-orange-500/15 px-2.5 py-1 text-xs font-medium text-orange-400">
                 <Loader2 className="h-3 w-3 animate-spin" />Analyzing…

@@ -133,6 +133,21 @@ interface NoteComment {
 type Tab = "shared" | "group-notes" | "live" | "leaderboard" | "exam";
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/#{1,6}\s+/g, "")
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/\*(.+?)\*/g, "$1")
+    .replace(/`(.+?)`/g, "$1")
+    .replace(/\[(.+?)\]\(.+?\)/g, "$1")
+    .replace(/\n{2,}/g, " ")
+    .trim();
+}
+
+// ---------------------------------------------------------------------------
 // Supabase browser client (singleton)
 // ---------------------------------------------------------------------------
 
@@ -354,7 +369,7 @@ function ViewNoteModal({ note, groupId, currentUserId, onClose }: {
           {note.ai_summary ? (
             <div>
               <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-accent">AI Summary</p>
-              <div className="rounded-lg border border-accent/30 bg-accent/5 px-4 py-3 text-sm leading-relaxed">{note.ai_summary}</div>
+              <div className="rounded-lg border border-accent/30 bg-accent/5 px-4 py-3 text-sm leading-relaxed">{stripMarkdown(note.ai_summary)}</div>
             </div>
           ) : (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -470,8 +485,9 @@ function SharedNoteCard({ note, currentUserId, onView, onStudy }: {
     finally { setStudyLoading(false); }
   }
 
-  const summaryPreview = note.ai_summary ? note.ai_summary.slice(0, 100) + (note.ai_summary.length > 100 ? "…" : "") : null;
-  const dateStr = new Date(note.shared_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  const rawSummary = note.ai_summary ? stripMarkdown(note.ai_summary) : null;
+  const summaryPreview = rawSummary ? rawSummary.slice(0, 120) + (rawSummary.length > 120 ? "…" : "") : null;
+  const dateStr = new Date(note.shared_at).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 
   return (
     <div className="rounded-xl border border-border/60 border-l-4 border-l-accent bg-card p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
@@ -485,28 +501,43 @@ function SharedNoteCard({ note, currentUserId, onView, onStudy }: {
         </p>
       )}
       {importError && <p className="mt-2 text-xs text-destructive">{importError}</p>}
-      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-        <Button variant="outline" size="sm" className="gap-1.5" onClick={() => onView(note)}>
+      <div className="mt-3 space-y-1.5">
+        {/* View — full width */}
+        <button
+          onClick={() => onView(note)}
+          className="flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-lg border border-border py-2 text-sm text-muted-foreground transition-colors hover:border-accent hover:text-accent"
+        >
           <FileText className="h-3.5 w-3.5" />View & Comment
-        </Button>
-        <Button variant="outline" size="sm" className="gap-1.5" onClick={handleStudy} disabled={studyLoading}>
-          {studyLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Layers className="h-3.5 w-3.5" />}
-          Flashcards
-        </Button>
-        {isOwnNote ? (
-          <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted px-2.5 py-1.5 text-xs font-medium text-muted-foreground">
-            Your note
-          </span>
-        ) : importDone ? (
-          <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted px-2.5 py-1.5 text-xs font-medium text-muted-foreground">
-            <Check className="h-3.5 w-3.5 text-green-500" />Imported
-          </span>
-        ) : (
-          <Button size="sm" className="gap-1.5 bg-accent text-accent-foreground hover:bg-accent/90" onClick={handleImport} disabled={importing}>
-            {importing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-            {importing ? "Importing…" : "Import Note"}
-          </Button>
-        )}
+        </button>
+        {/* Flashcards + Import/status — side by side */}
+        <div className="flex gap-1.5">
+          <button
+            onClick={handleStudy}
+            disabled={studyLoading}
+            className="flex min-h-[40px] flex-1 items-center justify-center gap-1.5 rounded-lg border border-border py-2 text-sm text-muted-foreground transition-colors hover:border-accent hover:text-accent disabled:opacity-60"
+          >
+            {studyLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Layers className="h-3.5 w-3.5" />}
+            Flashcards
+          </button>
+          {isOwnNote ? (
+            <span className="flex min-h-[40px] flex-1 items-center justify-center gap-1 rounded-lg border border-border bg-muted py-2 text-xs font-medium text-muted-foreground">
+              Your note
+            </span>
+          ) : importDone ? (
+            <span className="flex min-h-[40px] flex-1 items-center justify-center gap-1 rounded-lg border border-border bg-muted py-2 text-xs font-medium text-muted-foreground">
+              <Check className="h-3.5 w-3.5 text-green-500" />Imported
+            </span>
+          ) : (
+            <button
+              onClick={handleImport}
+              disabled={importing}
+              className="flex min-h-[40px] flex-1 items-center justify-center gap-1.5 rounded-lg bg-accent py-2 text-sm font-medium text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
+            >
+              {importing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+              {importing ? "Importing…" : "Import"}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -1333,7 +1364,7 @@ export default function GroupDetailPage() {
             <h1 className="text-3xl font-bold">{group.name}</h1>
             <p className="mt-1 text-sm text-muted-foreground">{members.length} member{members.length === 1 ? "" : "s"}</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
             <InviteDialog groupId={group.id} />
             <ShareNoteDialog groupId={group.id} myNotes={myNotes} members={members} onShared={handleNoteShared} />
             {myRole && myRole !== "owner" && (
@@ -1360,16 +1391,16 @@ export default function GroupDetailPage() {
 
           <section className="lg:col-span-3">
             {/* Tabs */}
-            <div className="mb-5 -mx-1 flex overflow-x-auto gap-1 hide-scrollbar">
+            <div className="scrollbar-hide mb-5 -mx-4 flex overflow-x-auto border-b border-border px-4 sm:-mx-0 sm:px-0">
               {TABS.map((t) => (
                 <button
                   key={t.key}
                   onClick={() => setActiveTab(t.key)}
                   className={cn(
-                    "shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors whitespace-nowrap",
+                    "shrink-0 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-medium transition-colors",
                     activeTab === t.key
-                      ? "bg-accent text-accent-foreground"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                      ? "border-accent text-accent"
+                      : "border-transparent text-muted-foreground hover:text-foreground"
                   )}
                 >
                   {t.label}

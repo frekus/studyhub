@@ -449,7 +449,7 @@ function UserRowMenu({ user, onRefresh, onView }: { user: AdminUser; onRefresh: 
               Change Plan <ChevronDown className="ml-auto h-3 w-3" />
             </MenuItem>
             {subOpen && (
-              <div className="absolute right-full top-0 mr-1 w-40 rounded-xl border border-[#1a3330] bg-[#071A18] shadow-xl py-1">
+              <div className="absolute right-0 top-full z-50 mt-0.5 w-44 rounded-xl border border-[#1a3330] bg-[#071A18] shadow-xl py-1">
                 <MenuItem onClick={() => changePlan("popular")}>Upgrade to Popular</MenuItem>
                 <MenuItem onClick={() => changePlan("pro")}>Upgrade to Pro</MenuItem>
                 <MenuItem onClick={() => changePlan("free")}>Downgrade to Free</MenuItem>
@@ -680,26 +680,32 @@ function UsersTab({ onViewUser }: { onViewUser: (id: string) => void }) {
 
       {/* Bulk actions bar */}
       {selected.size > 0 && (
-        <div className="rounded-xl border border-teal-700/40 bg-teal-900/20 px-4 py-3 flex flex-wrap items-center gap-2">
-          <p className="text-sm font-medium text-teal-300 mr-2">{selected.size} selected</p>
-          {[
-            { action: "upgrade_popular", label: "→ Popular" },
-            { action: "upgrade_pro", label: "→ Pro" },
-            { action: "downgrade_free", label: "→ Free" },
-            { action: "reset_password", label: "Reset PWD" },
-            { action: "suspend", label: "Suspend" },
-            { action: "delete", label: "Delete" },
-          ].map(({ action, label }) => (
-            <button key={action} onClick={() => bulkAction(action)} disabled={bulkBusy}
-              className={cn("rounded-md px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50",
-                action === "delete" || action === "suspend" ? "border border-red-700/50 text-red-400 hover:bg-red-900/20" : "border border-[#1a3330] text-white hover:bg-[#1a3330]"
-              )}>
-              {label}
+        <div className="rounded-xl border border-teal-700/40 bg-teal-900/20 p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-sm font-medium text-teal-300">{selected.size} user{selected.size !== 1 ? "s" : ""} selected</p>
+            <button onClick={exportCSV} className="flex items-center gap-1.5 rounded-md border border-[#1a3330] px-2.5 py-1 text-xs text-white hover:bg-[#1a3330] transition-colors">
+              <Download className="h-3.5 w-3.5" />Export CSV
             </button>
-          ))}
-          <button onClick={exportCSV} className="ml-auto flex items-center gap-1.5 rounded-md border border-[#1a3330] px-3 py-1.5 text-xs text-white hover:bg-[#1a3330] transition-colors">
-            <Download className="h-3.5 w-3.5" />Export CSV
-          </button>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {[
+              { action: "upgrade_popular", label: "Upgrade to Popular" },
+              { action: "upgrade_pro",     label: "Upgrade to Pro" },
+              { action: "downgrade_free",  label: "Downgrade to Free" },
+              { action: "reset_password",  label: "Reset Password" },
+              { action: "suspend",         label: "Suspend" },
+              { action: "delete",          label: "Delete" },
+            ].map(({ action, label }) => (
+              <button key={action} onClick={() => bulkAction(action)} disabled={bulkBusy}
+                className={cn("rounded-md px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-50 whitespace-nowrap",
+                  action === "delete" || action === "suspend"
+                    ? "border border-red-700/50 text-red-400 hover:bg-red-900/20"
+                    : "border border-[#1a3330] text-white hover:bg-[#1a3330]"
+                )}>
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -716,8 +722,8 @@ function UsersTab({ onViewUser }: { onViewUser: (id: string) => void }) {
                 <tr className="border-b border-[#1a3330] bg-[#071A18]">
                   <th className="px-4 py-3 text-left"><input type="checkbox" checked={selected.size === users.length && users.length > 0} onChange={toggleAll} className="accent-teal-500" /></th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-[#6b8f88] uppercase tracking-wide">User</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-[#6b8f88] uppercase tracking-wide hidden md:table-cell">Plan</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-[#6b8f88] uppercase tracking-wide hidden md:table-cell">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-[#6b8f88] uppercase tracking-wide hidden sm:table-cell">Plan</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-[#6b8f88] uppercase tracking-wide hidden sm:table-cell">Status</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-[#6b8f88] uppercase tracking-wide hidden lg:table-cell">Notes</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-[#6b8f88] uppercase tracking-wide hidden lg:table-cell">Joined</th>
                   <th className="px-4 py-3" />
@@ -736,8 +742,8 @@ function UsersTab({ onViewUser }: { onViewUser: (id: string) => void }) {
                         </div>
                       </button>
                     </td>
-                    <td className="px-4 py-3 hidden md:table-cell"><PlanBadge plan={u.subscription_tier} /></td>
-                    <td className="px-4 py-3 hidden md:table-cell"><StatusBadge status={u.subscription_status} /></td>
+                    <td className="px-4 py-3 hidden sm:table-cell"><PlanBadge plan={u.subscription_tier} /></td>
+                    <td className="px-4 py-3 hidden sm:table-cell"><StatusBadge status={u.subscription_status} /></td>
                     <td className="px-4 py-3 text-[#6b8f88] hidden lg:table-cell">{u.notes_count}</td>
                     <td className="px-4 py-3 text-[#6b8f88] hidden lg:table-cell">{fmtDate(u.created_at)}</td>
                     <td className="px-4 py-3">
