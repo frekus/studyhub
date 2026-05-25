@@ -118,6 +118,15 @@ input, textarea, select {
   overscroll-behavior: contain;
 }
 
+/* Hide scrollbar visually while keeping scroll functional */
+.hide-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* Glassmorphism card base */
 .glass {
   background: rgba(13, 43, 39, 0.75);

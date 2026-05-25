@@ -6,12 +6,14 @@ import type { StudyNoteRow } from "@studyhub/database";
 
 const UpdateNoteSchema = z
   .object({
-    title: z.string().min(1).max(500).optional(),
-    content: z.string().optional(),
+    title:     z.string().min(1).max(500).optional(),
+    content:   z.string().optional(),
+    folder_id: z.string().uuid().nullable().optional(),
   })
-  .refine((d) => d.title !== undefined || d.content !== undefined, {
-    message: "At least one of title or content must be provided",
-  });
+  .refine(
+    (d) => d.title !== undefined || d.content !== undefined || d.folder_id !== undefined,
+    { message: "At least one of title, content, or folder_id must be provided" },
+  );
 
 type Params = Promise<{ id: string }>;
 

@@ -26,3 +26,18 @@ export type ExamPredictPayload = {
   title: string;
   content: string;
 };
+
+export type GroupNoteSummarizePayload = {
+  groupNoteId: string;
+  groupId: string;
+  title: string;
+  content: string | null;
+};
+
+export type GroupExamPredictPayload = {
+  predictionId: string;
+  groupId: string;
+  combinedContent: string;
+  papersCount: number;
+  membersCount: number;
+};

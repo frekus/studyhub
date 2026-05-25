@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { LayoutDashboard, Settings, CreditCard, LogOut } from "lucide-react";
+import { LayoutDashboard, Settings, CreditCard, LogOut, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -13,10 +13,17 @@ interface Props {
 export function AvatarDropdown({ email, plan }: Props) {
   const [open, setOpen]           = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [isAdmin, setIsAdmin]     = useState(false);
   const containerRef              = useRef<HTMLDivElement>(null);
   const initial                   = email.charAt(0).toUpperCase();
 
-  // Close on outside click
+  useEffect(() => {
+    fetch("/api/admin/check")
+      .then((r) => r.json())
+      .then((j) => setIsAdmin(j.data?.isAdmin === true))
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     function handler(e: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
@@ -40,7 +47,6 @@ export function AvatarDropdown({ email, plan }: Props) {
 
   return (
     <div ref={containerRef} className="relative">
-      {/* Avatar button */}
       <button
         onClick={() => setOpen((v) => !v)}
         aria-label="Account menu"
@@ -50,7 +56,6 @@ export function AvatarDropdown({ email, plan }: Props) {
         {initial}
       </button>
 
-      {/* Dropdown */}
       {open && (
         <div
           className={cn(
@@ -58,7 +63,6 @@ export function AvatarDropdown({ email, plan }: Props) {
             "animate-in fade-in-0 zoom-in-95 duration-100",
           )}
         >
-          {/* Email header */}
           <div className="px-4 py-3">
             <p className="max-w-44 truncate text-xs text-muted-foreground">{email}</p>
             {plan && (
@@ -75,7 +79,6 @@ export function AvatarDropdown({ email, plan }: Props) {
 
           <div className="border-t border-border/60" />
 
-          {/* Nav items */}
           <div className="p-1">
             {[
               { icon: LayoutDashboard, label: "Dashboard",       href: "/dashboard" },
@@ -92,6 +95,17 @@ export function AvatarDropdown({ email, plan }: Props) {
                 {label}
               </Link>
             ))}
+
+            {isAdmin && (
+              <Link
+                href="/admin"
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-orange-400 transition-colors hover:bg-orange-500/10"
+              >
+                <ShieldCheck className="h-4 w-4" />
+                Admin Console
+              </Link>
+            )}
           </div>
 
           <div className="border-t border-border/60" />

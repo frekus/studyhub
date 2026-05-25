@@ -1,0 +1,73 @@
+import Anthropic from "@anthropic-ai/sdk";
+import { createClient, requireUser } from "@/lib/supabase/server";
+import { createAdminClient } from "@studyhub/database";
+import { ok, err } from "@/lib/response";
+
+type Params = Promise<{ id: string }>;
+
+const SUPPORTED = new Set([".txt", ".pdf", ".png", ".jpg", ".jpeg"]);
+const MAX_SIZE  = 10 * 1024 * 1024;
+
+function ext(name: string) { const i = name.lastIndexOf("."); return i >= 0 ? name.slice(i).toLowerCase() : ""; }
+
+async function extractText(file: File): Promise<string> {
+  const e = ext(file.name);
+  const buf = Buffer.from(await file.arrayBuffer());
+  if (e === ".txt") return buf.toString("utf-8");
+  if (e === ".pdf") {
+    const { default: PDFParser } = await import("pdf2json");
+    return new Promise((resolve, reject) => {
+      const p = new PDFParser();
+      p.on("pdfParser_dataReady", (d) => resolve(
+        d.Pages.flatMap((pg) => pg.Texts).map((t) => decodeURIComponent(t.R[0]?.T ?? "")).join(" ")
+      ));
+      p.on("pdfParser_dataError", (e) => reject(e instanceof Error ? e : e.parserError));
+      p.parseBuffer(buf);
+    });
+  }
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const mt: "image/png" | "image/jpeg" = e === ".png" ? "image/png" : "image/jpeg";
+  const res = await anthropic.messages.create({
+    model: "claude-haiku-4-5-20251001", max_tokens: 2000,
+    messages: [{ role: "user", content: [
+      { type: "image", source: { type: "base64", media_type: mt, data: buf.toString("base64") } },
+      { type: "text",  text: "Extract all text from this exam paper. Return only the text." },
+    ]}],
+  });
+  const block = res.content[0];
+  return block.type === "text" ? block.text : "";
+}
+
+export async function POST(request: Request, { params }: { params: Params }) {
+  const { id } = await params;
+  const supabase = await createClient();
+  const { user, authErr } = await requireUser(supabase);
+  if (authErr) return authErr;
+
+  const admin = createAdminClient();
+  const { data: membership } = await admin
+    .from("study_group_members").select("id").eq("group_id", id).eq("user_id", user.id).maybeSingle();
+  if (!membership) return err("Access denied", 403);
+
+  let formData: FormData;
+  try { formData = await request.formData(); } catch { return err("Invalid form data", 400); }
+
+  const title = formData.get("title");
+  const file  = formData.get("file");
+  if (typeof title !== "string" || !title.trim()) return err("title is required", 400);
+  if (!(file instanceof File)) return err("file is required", 400);
+  if (!SUPPORTED.has(ext(file.name))) return err("Unsupported file type", 400);
+  if (file.size > MAX_SIZE) return err("File exceeds 10 MB limit", 400);
+
+  let content: string;
+  try { content = await extractText(file); } catch { return err("Failed to extract text", 422); }
+  if (!content.trim()) return err("Could not extract text from file", 400);
+
+  const { data: upload, error } = await admin
+    .from("group_exam_uploads")
+    .insert({ group_id: id, uploaded_by: user.id, title: title.trim(), content })
+    .select().single();
+  if (error) return err(error.message, 500);
+
+  return ok({ upload }, 201);
+}

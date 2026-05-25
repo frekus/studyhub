@@ -4,11 +4,13 @@ import { ok, err, validationErr } from "@/lib/response";
 import { cacheKeys, tryGet, trySet, tryDel, NOTE_TTL } from "@/lib/cache";
 import { tryPublishNoteSummarize } from "@/lib/queue";
 import { checkLimit, incrementUsage } from "@/lib/usage";
+import { recordStudyActivity } from "@/lib/streaks";
 import type { StudyNoteRow } from "@studyhub/database";
 
 const CreateNoteSchema = z.object({
-  title: z.string().min(1, "title is required").max(500),
-  content: z.string().optional(),
+  title:     z.string().min(1, "title is required").max(500),
+  content:   z.string().optional(),
+  folder_id: z.string().uuid().nullable().optional(),
 });
 
 export async function POST(request: Request) {
@@ -42,9 +44,8 @@ export async function POST(request: Request) {
   void incrementUsage(user.id, "notes", supabase);
   await tryDel(cacheKeys.notesList(user.id));
 
-  // Fire-and-forget: publish after the response is already determined.
-  // Using void intentionally — a RabbitMQ failure must not block or fail the request.
-  // ai_summary is nullable; the note is fully usable without it.
+  void recordStudyActivity(user.id, "note_created", supabase).catch(console.error);
+
   void tryPublishNoteSummarize({
     noteId: note.id,
     userId: user.id,
@@ -55,29 +56,43 @@ export async function POST(request: Request) {
   return ok({ note }, 201);
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const supabase = await createClient();
   const { user, authErr } = await requireUser(supabase);
   if (authErr) return authErr;
 
-  const listKey = cacheKeys.notesList(user.id);
+  const { searchParams } = new URL(request.url);
+  const folderParam = searchParams.get("folder_id");
 
-  const cached = await tryGet<{ notes: StudyNoteRow[] }>(listKey);
-  if (cached) {
-    const response = ok(cached);
-    response.headers.set("X-Cache", "HIT");
-    return response;
+  // When filtering by folder, skip cache (small result set, infrequent)
+  const listKey = folderParam ? null : cacheKeys.notesList(user.id);
+
+  if (listKey) {
+    const cached = await tryGet<{ notes: StudyNoteRow[] }>(listKey);
+    if (cached) {
+      const response = ok(cached);
+      response.headers.set("X-Cache", "HIT");
+      return response;
+    }
   }
 
-  const { data: notes, error } = await supabase
+  let query = supabase
     .from("study_notes")
     .select("*")
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });
 
+  if (folderParam === "uncategorized") {
+    query = query.is("folder_id", null) as typeof query;
+  } else if (folderParam) {
+    query = query.eq("folder_id", folderParam) as typeof query;
+  }
+
+  const { data: notes, error } = await query;
+
   if (error) return err(error.message, 500);
 
-  await trySet(listKey, { notes }, NOTE_TTL);
+  if (listKey) await trySet(listKey, { notes }, NOTE_TTL);
 
   const response = ok({ notes });
   response.headers.set("X-Cache", "MISS");

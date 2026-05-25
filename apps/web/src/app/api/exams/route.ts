@@ -4,6 +4,7 @@ import { ok, err } from "@/lib/response";
 import { cacheKeys, tryGet, trySet, tryDel, EXAM_TTL } from "@/lib/cache";
 import { tryPublishExamPredict } from "@/lib/queue";
 import { checkLimit, incrementUsage } from "@/lib/usage";
+import { recordStudyActivity } from "@/lib/streaks";
 import type { ExamUploadRow } from "@studyhub/database";
 
 const SUPPORTED_EXTENSIONS = new Set([".txt", ".pdf", ".png", ".jpg", ".jpeg"]);
@@ -134,6 +135,8 @@ export async function POST(request: Request) {
 
   void incrementUsage(user.id, "exam_predictions", supabase);
   await tryDel(cacheKeys.examsList(user.id));
+
+  void recordStudyActivity(user.id, "exam_uploaded", supabase).catch(console.error);
 
   void tryPublishExamPredict({
     examId: exam.id,

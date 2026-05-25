@@ -3,15 +3,17 @@ import { resolve } from "path";
 config({ path: resolve(process.cwd(), ".env.local") });
 
 import { createConnection } from "@studyhub/queue";
-import type { NoteSummarizePayload, NoteFlashcardsPayload, ExamPredictPayload } from "@studyhub/queue";
+import type { NoteSummarizePayload, NoteFlashcardsPayload, ExamPredictPayload, GroupNoteSummarizePayload, GroupExamPredictPayload } from "@studyhub/queue";
 import { createAdminClient } from "@studyhub/database";
 import type { Json } from "@studyhub/database";
 import { redis } from "@studyhub/cache";
 import Anthropic from "@anthropic-ai/sdk";
 
-const SUMMARIZE_QUEUE  = "note.summarize";
-const FLASHCARDS_QUEUE = "note.flashcards";
-const EXAM_QUEUE       = "exam.predict";
+const SUMMARIZE_QUEUE       = "note.summarize";
+const FLASHCARDS_QUEUE      = "note.flashcards";
+const EXAM_QUEUE            = "exam.predict";
+const GROUP_SUMMARIZE_QUEUE = "group.note.summarize";
+const GROUP_EXAM_QUEUE      = "group.exam.predict";
 
 // ---------------------------------------------------------------------------
 // Clients — initialised once per process
@@ -284,18 +286,24 @@ async function main(): Promise<void> {
 
   const connection = await connectWithRetry();
 
-  // Three channels so each queue has its own prefetch window
-  const summarizeChannel  = await connection.createChannel();
-  const flashcardsChannel = await connection.createChannel();
-  const examChannel       = await connection.createChannel();
+  // One channel per queue for isolated prefetch windows
+  const summarizeChannel      = await connection.createChannel();
+  const flashcardsChannel     = await connection.createChannel();
+  const examChannel           = await connection.createChannel();
+  const groupSummarizeChannel = await connection.createChannel();
+  const groupExamChannel      = await connection.createChannel();
 
-  await summarizeChannel.assertQueue(SUMMARIZE_QUEUE,   { durable: true });
-  await flashcardsChannel.assertQueue(FLASHCARDS_QUEUE, { durable: true });
-  await examChannel.assertQueue(EXAM_QUEUE,             { durable: true });
+  await summarizeChannel.assertQueue(SUMMARIZE_QUEUE,           { durable: true });
+  await flashcardsChannel.assertQueue(FLASHCARDS_QUEUE,         { durable: true });
+  await examChannel.assertQueue(EXAM_QUEUE,                     { durable: true });
+  await groupSummarizeChannel.assertQueue(GROUP_SUMMARIZE_QUEUE, { durable: true });
+  await groupExamChannel.assertQueue(GROUP_EXAM_QUEUE,           { durable: true });
 
   summarizeChannel.prefetch(1);
   flashcardsChannel.prefetch(1);
   examChannel.prefetch(1);
+  groupSummarizeChannel.prefetch(1);
+  groupExamChannel.prefetch(1);
 
   connection.on("error", (err) => console.error("[rabbitmq] Connection error:", err));
   connection.on("close", () => {
@@ -469,14 +477,121 @@ async function main(): Promise<void> {
     }
   });
 
+  // ---- Consumer: group.note.summarize -------------------------------------
+
+  console.log(`[worker] Consuming queue "${GROUP_SUMMARIZE_QUEUE}"`);
+
+  groupSummarizeChannel.consume(GROUP_SUMMARIZE_QUEUE, async (msg) => {
+    if (!msg) return;
+
+    let payload: GroupNoteSummarizePayload;
+    try {
+      payload = JSON.parse(msg.content.toString()) as GroupNoteSummarizePayload;
+    } catch {
+      console.error("[group-summarize] Malformed message — discarding");
+      groupSummarizeChannel.nack(msg, false, false);
+      return;
+    }
+
+    const { groupNoteId, title, content } = payload;
+    console.log(`[group-summarize] Processing group note ${groupNoteId}`);
+
+    try {
+      const summary = await generateSummary(title, content);
+
+      const { error } = await supabase
+        .from("group_notes")
+        .update({ ai_summary: summary })
+        .eq("id", groupNoteId);
+
+      if (error) throw new Error(`Supabase update failed: ${error.message}`);
+
+      groupSummarizeChannel.ack(msg);
+      console.log(`[group-summarize] Done group note ${groupNoteId}`);
+    } catch (error) {
+      console.error(`[group-summarize] Failed group note ${groupNoteId}:`, error);
+      groupSummarizeChannel.nack(msg, false, false);
+    }
+  });
+
+  // ---- Consumer: group.exam.predict ---------------------------------------
+
+  console.log(`[worker] Consuming queue "${GROUP_EXAM_QUEUE}"`);
+
+  groupExamChannel.consume(GROUP_EXAM_QUEUE, async (msg) => {
+    if (!msg) return;
+
+    let payload: GroupExamPredictPayload;
+    try {
+      payload = JSON.parse(msg.content.toString()) as GroupExamPredictPayload;
+    } catch {
+      console.error("[group-exam] Malformed message — discarding");
+      groupExamChannel.nack(msg, false, false);
+      return;
+    }
+
+    const { predictionId, combinedContent } = payload;
+    console.log(`[group-exam] Generating predictions for group prediction ${predictionId}`);
+
+    try {
+      const result = await anthropic.messages.create({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 3072,
+        messages: [
+          {
+            role: "user",
+            content:
+              `You are an exam prediction expert. Multiple study group members have uploaded past exam papers. Analyze all papers and predict the most likely questions for the next exam.\n\n` +
+              `Combined past exam papers:\n${combinedContent}\n\n` +
+              `Generate exactly 15 predicted questions as a JSON array.\n` +
+              `Each item must have:\n` +
+              `- question: string (the predicted exam question)\n` +
+              `- topic: string (topic this question covers)\n` +
+              `- likelihood: string (exactly one of: high, medium, low)\n` +
+              `- explanation: string (why this question is likely to appear, referencing which papers suggest it)\n\n` +
+              `Return ONLY a valid JSON array. No markdown. No explanation. No code blocks.`,
+          },
+        ],
+      });
+
+      const block = result.content[0];
+      if (block.type !== "text") throw new Error("Non-text response from Anthropic");
+
+      const raw = block.text.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
+      const predictions = JSON.parse(raw) as unknown[];
+      if (!Array.isArray(predictions)) throw new Error("Response is not an array");
+
+      const { error } = await supabase
+        .from("group_predictions")
+        .update({ predictions: predictions as unknown as Json[], status: "ready" })
+        .eq("id", predictionId);
+
+      if (error) throw new Error(`Supabase update failed: ${error.message}`);
+
+      groupExamChannel.ack(msg);
+      console.log(`[group-exam] Done prediction ${predictionId} — ${predictions.length} predictions`);
+    } catch (error) {
+      console.error(`[group-exam] Failed prediction ${predictionId}:`, error);
+      try {
+        await supabase
+          .from("group_predictions")
+          .update({ status: "failed" })
+          .eq("id", predictionId);
+      } catch { /* best-effort */ }
+      groupExamChannel.nack(msg, false, false);
+    }
+  });
+
   // ---- Graceful shutdown ---------------------------------------------------
 
   const shutdown = async (signal: string) => {
     console.log(`\n[worker] ${signal} received — shutting down`);
-    try { await summarizeChannel.close();  } catch { /* ignore */ }
-    try { await flashcardsChannel.close(); } catch { /* ignore */ }
-    try { await examChannel.close();       } catch { /* ignore */ }
-    try { await connection.close();        } catch { /* ignore */ }
+    try { await summarizeChannel.close();      } catch { /* ignore */ }
+    try { await flashcardsChannel.close();     } catch { /* ignore */ }
+    try { await examChannel.close();           } catch { /* ignore */ }
+    try { await groupSummarizeChannel.close(); } catch { /* ignore */ }
+    try { await groupExamChannel.close();      } catch { /* ignore */ }
+    try { await connection.close();            } catch { /* ignore */ }
     process.exit(0);
   };
 

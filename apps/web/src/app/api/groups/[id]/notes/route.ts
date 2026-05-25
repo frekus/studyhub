@@ -6,7 +6,8 @@ import { ok, err, validationErr } from "@/lib/response";
 type Params = Promise<{ id: string }>;
 
 const ShareNoteSchema = z.object({
-  noteId: z.string().uuid("noteId must be a valid UUID"),
+  noteId:   z.string().uuid("noteId must be a valid UUID"),
+  mentions: z.array(z.string().uuid()).optional(),
 });
 
 async function assertMembership(admin: ReturnType<typeof createAdminClient>, groupId: string, userId: string) {
@@ -53,6 +54,28 @@ export async function POST(request: Request, { params }: { params: Params }) {
     .insert({ group_id: id, note_id: parsed.data.noteId, shared_by: user.id });
 
   if (error && error.code !== "23505") return err(error.message, 500);
+
+  // Create mention notifications
+  const mentions = parsed.data.mentions ?? [];
+  if (mentions.length > 0) {
+    const { data: noteData } = await admin
+      .from("study_notes").select("title").eq("id", parsed.data.noteId).maybeSingle();
+    const { data: sharer } = await admin
+      .from("users").select("full_name").eq("id", user.id).maybeSingle();
+    const sharerName = sharer?.full_name ?? "Someone";
+    const noteTitle  = noteData?.title ?? "a note";
+
+    await admin.from("group_notifications").insert(
+      mentions.map((mentionedUserId) => ({
+        user_id:      mentionedUserId,
+        group_id:     id,
+        from_user_id: user.id,
+        type:         "mention",
+        message:      `${sharerName} mentioned you in "${noteTitle}"`,
+        note_id:      parsed.data.noteId,
+      })),
+    );
+  }
 
   return ok({ success: true });
 }
