@@ -77,5 +77,34 @@ export async function GET(_request: Request, { params }: { params: Params }) {
 
   if (error) return err(error.message, 500);
 
-  return ok({ notes: data ?? [] });
+  // Resolve sharer display names from public.users
+  const sharerIds = [...new Set((data ?? []).map((n) => n.shared_by).filter(Boolean))];
+  let sharerMap: Record<string, string> = {};
+  if (sharerIds.length > 0) {
+    const { data: profiles } = await admin
+      .from("users")
+      .select("id, full_name")
+      .in("id", sharerIds);
+    sharerMap = Object.fromEntries(
+      (profiles ?? []).map((p) => [p.id, p.full_name ?? "Unknown"]),
+    );
+  }
+
+  // Return a flat structure that includes all fields the client needs
+  const notes = (data ?? []).map((n) => {
+    const sn = Array.isArray(n.study_notes) ? n.study_notes[0] : n.study_notes;
+    return {
+      id: n.id,
+      note_id: sn?.id ?? "",
+      group_id: id,
+      shared_at: n.shared_at,
+      shared_by: n.shared_by,
+      sharer_name: sharerMap[n.shared_by] ?? "Unknown",
+      title: sn?.title ?? "",
+      content: sn?.content ?? "",
+      ai_summary: sn?.ai_summary ?? null,
+    };
+  });
+
+  return ok({ notes });
 }

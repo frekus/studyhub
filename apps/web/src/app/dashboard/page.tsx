@@ -310,10 +310,10 @@ function CreateGroupDialog({ onCreated, onLimitReached }: {
 
 function GroupCard({ group }: { group: Group }) {
   return (
-    <div className="rounded-xl border border-border/60 bg-card p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg">
+    <div className="rounded-xl border border-border/60 bg-card p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg sm:p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <h3 className="truncate font-semibold">{group.name}</h3>
             {group.role === "owner" && (
               <span className="shrink-0 rounded-full bg-orange-500/20 px-2 py-0.5 text-xs text-orange-400">owner</span>
@@ -323,7 +323,7 @@ function GroupCard({ group }: { group: Group }) {
             {group.member_count} member{group.member_count === 1 ? "" : "s"} · Created {formatDate(group.created_at)}
           </p>
         </div>
-        <Button size="sm" variant="outline" asChild>
+        <Button size="sm" variant="outline" className="shrink-0 min-w-[72px]" asChild>
           <Link href={`/dashboard/groups/${group.id}`}>
             <ExternalLink className="h-3.5 w-3.5" />View
           </Link>
@@ -909,22 +909,24 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
         <div className="mx-auto flex max-w-4xl gap-0">
           {(
             [
-              { id: "notes",  label: "My Notes",  icon: <BookOpen className="h-4 w-4" /> },
-              { id: "groups", label: "Groups",     icon: <Users className="h-4 w-4" /> },
-              { id: "exams",  label: "Exam Prep",  icon: <GraduationCap className="h-4 w-4" /> },
+              { id: "notes",  label: "Notes",   icon: <BookOpen className="h-4 w-4" /> },
+              { id: "groups", label: "Groups",  icon: <Users className="h-4 w-4" /> },
+              { id: "exams",  label: "Exams",   icon: <GraduationCap className="h-4 w-4" /> },
             ] as const
           ).map(({ id, label, icon }) => (
             <button
               key={id}
               onClick={() => setTab(id)}
               className={cn(
-                "flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors",
+                "flex flex-1 items-center justify-center gap-1.5 border-b-2 px-2 py-3 text-sm font-medium transition-colors sm:flex-none sm:justify-start sm:px-4 sm:gap-2",
                 tab === id
                   ? "border-orange-400 text-orange-400"
                   : "border-transparent text-muted-foreground hover:text-foreground"
               )}
             >
-              {icon}{label}
+              {icon}
+              <span className="hidden sm:inline">{label}</span>
+              <span className="sm:hidden text-xs">{label}</span>
             </button>
           ))}
         </div>
@@ -990,14 +992,21 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
               </Link>
             )}
 
-            <div className="mb-6 flex items-center justify-between">
-              <div>
-                <h1 className="text-2xl font-bold">My Notes</h1>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {notes.length === 0 ? "No notes yet" : `${notes.length} note${notes.length === 1 ? "" : "s"}`}
-                </p>
+            <div className="mb-6">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h1 className="text-2xl font-bold">My Notes</h1>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {notes.length === 0 ? "No notes yet" : `${notes.length} note${notes.length === 1 ? "" : "s"}`}
+                  </p>
+                </div>
+                <div className="hidden sm:block">
+                  <NewNoteDialog onCreated={handleNoteCreated} open={newNoteOpen} onOpenChange={setNewNoteOpen} onLimitReached={showUpgradeModal} />
+                </div>
               </div>
-              <NewNoteDialog onCreated={handleNoteCreated} open={newNoteOpen} onOpenChange={setNewNoteOpen} onLimitReached={showUpgradeModal} />
+              <div className="mt-3 sm:hidden">
+                <NewNoteDialog onCreated={handleNoteCreated} open={newNoteOpen} onOpenChange={setNewNoteOpen} onLimitReached={showUpgradeModal} />
+              </div>
             </div>
             {notes.length === 0 ? (
               <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-16 text-center">
@@ -1024,15 +1033,23 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
         {/* ── Groups tab ── */}
         {tab === "groups" && (
           <>
-            <div className="mb-6 flex items-center justify-between">
-              <div>
-                <h1 className="text-2xl font-bold">Study Groups</h1>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {groups.length === 0 ? "No groups yet" : `${groups.length} group${groups.length === 1 ? "" : "s"}`}
-                </p>
+            <div className="mb-6">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h1 className="text-2xl font-bold">Study Groups</h1>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {groups.length === 0 ? "No groups yet" : `${groups.length} group${groups.length === 1 ? "" : "s"}`}
+                  </p>
+                </div>
+                <div className="hidden items-center gap-2 sm:flex">
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href="/dashboard/groups/join"><UserPlus className="h-4 w-4" />Join group</Link>
+                  </Button>
+                  <CreateGroupDialog onCreated={handleGroupCreated} onLimitReached={showUpgradeModal} />
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" asChild>
+              <div className="mt-3 flex gap-2 sm:hidden">
+                <Button variant="outline" size="sm" className="flex-1" asChild>
                   <Link href="/dashboard/groups/join"><UserPlus className="h-4 w-4" />Join group</Link>
                 </Button>
                 <CreateGroupDialog onCreated={handleGroupCreated} onLimitReached={showUpgradeModal} />
