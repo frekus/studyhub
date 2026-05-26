@@ -609,9 +609,11 @@ function GroupNotesTab({ groupId, currentUserId, isOwner }: {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">{notes.length} collaborative note{notes.length !== 1 ? "s" : ""}</p>
-        <Button size="sm" onClick={() => setCreateOpen(true)}><PlusCircle className="h-4 w-4" />New Group Note</Button>
+        <Button size="sm" className="w-full sm:w-auto" onClick={() => setCreateOpen(true)}>
+          <PlusCircle className="h-4 w-4" />New Group Note
+        </Button>
       </div>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
@@ -663,7 +665,7 @@ function GroupNotesTab({ groupId, currentUserId, isOwner }: {
       ) : (
         <div className="space-y-3">
           {notes.map((n) => (
-            <div key={n.id} className="rounded-xl border border-border/60 bg-card p-4">
+            <div key={n.id} className="rounded-xl border border-border/60 bg-card p-4 [border-left:4px_solid_hsl(var(--accent))]">
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <p className="font-semibold">{n.title}</p>
@@ -799,7 +801,7 @@ function LiveSessionTab({ groupId, currentUserId, myNotes }: {
           <Play className="mb-3 h-8 w-8 text-muted-foreground" />
           <p className="text-sm font-medium">No active session</p>
           <p className="mt-1 text-xs text-muted-foreground">Start a live session to study flashcards together</p>
-          <Button className="mt-4" size="sm" onClick={() => setStartOpen(true)}>
+          <Button className="mt-4 w-full sm:w-auto" size="sm" onClick={() => setStartOpen(true)}>
             <Play className="h-4 w-4" />Start session
           </Button>
         </div>
@@ -835,7 +837,7 @@ function LiveSessionTab({ groupId, currentUserId, myNotes }: {
   return (
     <div className="space-y-4">
       {/* Session header */}
-      <div className="flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3">
+      <div className="flex flex-col gap-2 rounded-xl border border-border bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex items-center gap-2">
             <span className="font-semibold text-sm">{session.note_title ?? "Live Session"}</span>
@@ -947,7 +949,7 @@ function LeaderboardTab({ groupId, currentUserId }: { groupId: string; currentUs
                   {entry.notes_created} note{entry.notes_created !== 1 ? "s" : ""} · {entry.flashcards_reviewed} flashcards · {entry.study_days} day{entry.study_days !== 1 ? "s" : ""}
                 </p>
               </div>
-              <div className="shrink-0 text-right">
+              <div className="shrink-0 text-right min-w-[40px]">
                 <p className="font-bold text-sm">{entry.score}</p>
                 <p className="text-xs text-muted-foreground">pts</p>
               </div>
@@ -1026,12 +1028,14 @@ function ExamPredictionsTab({ groupId }: { groupId: string }) {
     <div className="space-y-6">
       {/* Upload section */}
       <div>
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex flex-col gap-2 mb-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-medium">Uploaded Papers ({uploads.length})</p>
             <p className="text-xs text-muted-foreground">Upload 2+ past exams to generate AI predictions</p>
           </div>
-          <Button size="sm" onClick={() => setUploadOpen(true)}><Upload className="h-4 w-4" />Upload Exam</Button>
+          <Button size="sm" className="w-full sm:w-auto" onClick={() => setUploadOpen(true)}>
+            <Upload className="h-4 w-4" />Upload Exam
+          </Button>
         </div>
 
         <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
@@ -1078,10 +1082,10 @@ function ExamPredictionsTab({ groupId }: { groupId: string }) {
 
       {/* Predictions section */}
       <div>
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex flex-col gap-2 mb-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm font-medium">AI Predictions</p>
           {uploads.length >= 2 && !prediction?.status.match(/pending|ready/) && (
-            <Button size="sm" onClick={handleGenerate} disabled={generating}>
+            <Button size="sm" className="w-full sm:w-auto" onClick={handleGenerate} disabled={generating}>
               <FlaskConical className="h-4 w-4" />{generating ? "Generating…" : "Generate Predictions"}
             </Button>
           )}
@@ -1233,11 +1237,11 @@ export default function GroupDetailPage() {
   const isOwner = myRole === "owner";
 
   const TABS: { key: Tab; label: string }[] = [
-    { key: "shared", label: "Shared Notes" },
-    { key: "group-notes", label: "Group Notes" },
-    { key: "live", label: "Live Session" },
-    { key: "leaderboard", label: "Leaderboard" },
-    { key: "exam", label: "Exam Predictions" },
+    { key: "shared",       label: "Shared" },
+    { key: "group-notes",  label: "Notes" },
+    { key: "live",         label: "Live" },
+    { key: "leaderboard",  label: "Board" },
+    { key: "exam",         label: "Exams" },
   ];
 
   if (loading) return (
@@ -1379,31 +1383,41 @@ export default function GroupDetailPage() {
         <div className="grid gap-8 lg:grid-cols-4">
           <aside className="lg:col-span-1">
             <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Members</h2>
-            <div className="flex gap-2 overflow-x-auto scrollbar-hide lg:flex-col lg:space-y-1.5 lg:gap-0">
-              {members.map((m) => (
-                <div key={m.id} className="flex shrink-0 items-center justify-between rounded-lg border border-border/60 bg-card px-3 py-2 lg:shrink lg:w-full">
-                  <span className="truncate text-sm whitespace-nowrap lg:whitespace-normal">{m.users?.full_name ?? `User ${m.user_id.slice(0, 8)}`}</span>
-                  {m.role === "owner" && <Crown className="ml-2 h-3 w-3 shrink-0 text-yellow-400" />}
-                </div>
-              ))}
+            <div className="relative">
+              <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 lg:flex-col lg:gap-0 lg:space-y-1.5">
+                {members.map((m) => (
+                  <div key={m.id} className="flex shrink-0 items-center justify-between rounded-lg border border-border/60 bg-card px-3 py-2 lg:shrink lg:w-full">
+                    <span className="truncate text-sm whitespace-nowrap lg:whitespace-normal">{m.users?.full_name ?? `User ${m.user_id.slice(0, 8)}`}</span>
+                    {m.role === "owner" && <Crown className="ml-2 h-3 w-3 shrink-0 text-yellow-400" />}
+                  </div>
+                ))}
+              </div>
+              {/* Fade hint for horizontal scroll on mobile */}
+              <div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-background to-transparent lg:hidden" />
             </div>
           </aside>
 
           <section className="lg:col-span-3">
             {/* Tabs */}
-            <div className="scrollbar-hide mb-5 -mx-4 flex overflow-x-auto border-b border-border px-4">
+            <div className="mb-5 -mx-4 flex border-b border-border overflow-x-auto scrollbar-hide">
               {TABS.map((t) => (
                 <button
                   key={t.key}
                   onClick={() => setActiveTab(t.key)}
                   className={cn(
-                    "shrink-0 whitespace-nowrap border-b-2 px-2.5 py-2 text-xs sm:text-sm sm:px-3 sm:py-2.5 font-medium transition-colors",
+                    "flex-1 min-w-0 flex flex-col items-center gap-0.5",
+                    "border-b-2 py-2 px-1 text-xs font-medium transition-colors",
                     activeTab === t.key
                       ? "border-accent text-accent"
                       : "border-transparent text-muted-foreground hover:text-foreground"
                   )}
                 >
-                  {t.label}
+                  {t.key === "shared"       && <Share2       className="h-4 w-4" />}
+                  {t.key === "group-notes"  && <BookOpen      className="h-4 w-4" />}
+                  {t.key === "live"         && <Play          className="h-4 w-4" />}
+                  {t.key === "leaderboard"  && <Trophy        className="h-4 w-4" />}
+                  {t.key === "exam"         && <FlaskConical  className="h-4 w-4" />}
+                  <span>{t.label}</span>
                 </button>
               ))}
             </div>
