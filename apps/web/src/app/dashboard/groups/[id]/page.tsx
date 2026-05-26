@@ -16,7 +16,7 @@ import {
   ArrowLeft, BookOpen, Users, Copy, Check, Home, LogOut, Share2,
   Loader2, Layers, Download, FileText, Trophy, Play, Square,
   PlusCircle, Send, Trash2, Smile, Upload, ChevronRight,
-  FlaskConical, Crown, Wifi, WifiOff,
+  FlaskConical, Crown, Wifi, WifiOff, X,
 } from "lucide-react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { cn } from "@/lib/utils";
@@ -710,6 +710,7 @@ function LiveSessionTab({ groupId, currentUserId, myNotes }: {
   const [startOpen, setStartOpen] = useState(false);
   const [selectedNoteId, setSelectedNoteId] = useState("");
   const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState("");
   const [joining, setJoining] = useState(false);
   const [flashcards, setFlashcards] = useState<Flashcard[]>([]);
   const [connected, setConnected] = useState(false);
@@ -758,15 +759,57 @@ function LiveSessionTab({ groupId, currentUserId, myNotes }: {
   async function handleStart(e: React.FormEvent) {
     e.preventDefault();
     if (!selectedNoteId) return;
+    setStartError("");
+
+    // Pre-check: note must already have flashcards
+    try {
+      const fcRes = await fetch(`/api/notes/${selectedNoteId}/flashcards`);
+      const fcJson = await fcRes.json();
+      const cards: Flashcard[] = fcJson.data?.flashcards ?? [];
+      if (cards.length === 0) {
+        setStartError("This note has no flashcards yet. Generate flashcards first before starting a session.");
+        return;
+      }
+    } catch {
+      setStartError("Could not verify flashcards. Please try again.");
+      return;
+    }
+
     const note = myNotes.find((n) => n.id === selectedNoteId);
     setStarting(true);
-    const res = await fetch(`/api/groups/${groupId}/sessions`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ noteId: selectedNoteId, noteTitle: note?.title }),
-    });
-    const j = await res.json();
-    if (res.ok) { setSession(j.data.session); setStartOpen(false); }
-    setStarting(false);
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10000);
+
+    try {
+      const res = await fetch(`/api/groups/${groupId}/sessions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ noteId: selectedNoteId, noteTitle: note?.title }),
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      const j = await res.json();
+      console.log("Session start response:", res.status, j);
+      if (!res.ok) {
+        setStartError(j.error ?? "Failed to start session. Please try again.");
+        return;
+      }
+      // Set session state synchronously so the Realtime subscription
+      // useEffect fires on the next render before any further API calls
+      setSession(j.data.session);
+      setStartOpen(false);
+    } catch (error) {
+      clearTimeout(timer);
+      console.error("Session start error:", error);
+      if (error instanceof Error && error.name === "AbortError") {
+        setStartError("Session timed out. Try again.");
+      } else {
+        setStartError("Failed to start session. Please try again.");
+      }
+    } finally {
+      setStarting(false);
+    }
   }
 
   async function handleJoin() {
@@ -805,27 +848,48 @@ function LiveSessionTab({ groupId, currentUserId, myNotes }: {
             <Play className="h-4 w-4" />Start session
           </Button>
         </div>
-        <Dialog open={startOpen} onOpenChange={setStartOpen}>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Start a live study session</DialogTitle></DialogHeader>
-            <form onSubmit={handleStart} className="mt-4 space-y-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Select a note with flashcards</label>
-                <select
-                  value={selectedNoteId} onChange={(e) => setSelectedNoteId(e.target.value)}
-                  className="flex h-10 w-full rounded-md border border-border bg-input px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        {startOpen && (
+          <div
+            className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm"
+            onClick={(ev) => { if (ev.target === ev.currentTarget) { setStartOpen(false); setStartError(""); } }}
+          >
+            <div className="mx-auto my-8 w-full max-w-md overflow-y-auto rounded-lg border border-border bg-card p-6 shadow-xl" style={{ maxHeight: "90vh" }}>
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-lg font-semibold">Start a live study session</h2>
+                <button
+                  type="button"
+                  onClick={() => { setStartOpen(false); setStartError(""); }}
+                  className="rounded-sm text-muted-foreground opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring"
                 >
-                  <option value="">— choose a note —</option>
-                  {myNotes.map((n) => <option key={n.id} value={n.id}>{n.title}</option>)}
-                </select>
+                  <X className="h-4 w-4" />
+                  <span className="sr-only">Close</span>
+                </button>
               </div>
-              <div className="flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => setStartOpen(false)}>Cancel</Button>
-                <Button type="submit" disabled={starting || !selectedNoteId}>{starting ? "Starting…" : "Start"}</Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
+              <form onSubmit={handleStart} className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Select a note with flashcards</label>
+                  <select
+                    value={selectedNoteId}
+                    onChange={(e) => { setSelectedNoteId(e.target.value); setStartError(""); }}
+                    className="flex h-10 w-full rounded-md border border-border bg-input px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <option value="">— choose a note —</option>
+                    {myNotes.map((n) => <option key={n.id} value={n.id}>{n.title}</option>)}
+                  </select>
+                </div>
+                {startError && (
+                  <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{startError}</p>
+                )}
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="outline" onClick={() => { setStartOpen(false); setStartError(""); }}>Cancel</Button>
+                  <Button type="submit" disabled={starting || !selectedNoteId}>
+                    {starting ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />Starting…</> : "Start"}
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -1001,15 +1065,29 @@ function ExamPredictionsTab({ groupId }: { groupId: string }) {
     e.preventDefault();
     if (!uploadFile || !uploadTitle.trim()) { setUploadError("Title and file are required"); return; }
     setUploading(true); setUploadError("");
-    const fd = new FormData();
-    fd.append("title", uploadTitle.trim());
-    fd.append("file", uploadFile);
-    const res = await fetch(`/api/groups/${groupId}/exam-uploads`, { method: "POST", body: fd });
-    const j = await res.json();
-    if (!res.ok) { setUploadError(j.error ?? "Upload failed"); setUploading(false); return; }
-    setUploads((prev) => [j.data.upload, ...prev]);
-    setUploadTitle(""); setUploadFile(null); setUploadOpen(false);
-    setUploading(false);
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 30000);
+
+    try {
+      const fd = new FormData();
+      fd.append("title", uploadTitle.trim());
+      fd.append("file", uploadFile);
+      const res = await fetch(`/api/groups/${groupId}/exam-uploads`, {
+        method: "POST", body: fd, signal: controller.signal,
+      });
+      clearTimeout(timer);
+      const j = await res.json();
+      if (!res.ok) { setUploadError(j.error ?? "Upload failed. Please try again."); return; }
+      setUploads((prev) => [j.data.upload, ...prev]);
+      setUploadTitle(""); setUploadFile(null); setUploadOpen(false);
+    } catch (error) {
+      clearTimeout(timer);
+      console.error("Upload error:", error);
+      setUploadError("Upload failed. Please try again.");
+    } finally {
+      setUploading(false);
+    }
   }
 
   async function handleGenerate() {
@@ -1038,28 +1116,48 @@ function ExamPredictionsTab({ groupId }: { groupId: string }) {
           </Button>
         </div>
 
-        <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Upload exam paper</DialogTitle></DialogHeader>
-            <form onSubmit={handleUpload} className="mt-4 space-y-3">
-              <input
-                value={uploadTitle} onChange={(e) => setUploadTitle(e.target.value)}
-                placeholder="Paper title (e.g. 2023 Final Exam)"
-                className="flex h-10 w-full rounded-md border border-border bg-input px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-              <input
-                type="file" accept=".txt,.pdf,.png,.jpg,.jpeg"
-                onChange={(e) => setUploadFile(e.target.files?.[0] ?? null)}
-                className="block w-full text-sm text-muted-foreground file:mr-4 file:rounded-md file:border-0 file:bg-accent file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-accent-foreground"
-              />
-              {uploadError && <p className="text-sm text-destructive">{uploadError}</p>}
-              <div className="flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => setUploadOpen(false)}>Cancel</Button>
-                <Button type="submit" disabled={uploading}>{uploading ? "Uploading…" : "Upload"}</Button>
+        {uploadOpen && (
+          /* Fixed overlay with overflow-y-auto so the box stays reachable when mobile keyboard opens */
+          <div
+            className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm"
+            onClick={(ev) => { if (ev.target === ev.currentTarget) setUploadOpen(false); }}
+          >
+            <div className="mx-auto my-8 w-full max-w-md overflow-y-auto rounded-lg border border-border bg-card p-6 shadow-xl" style={{ maxHeight: "90vh" }}>
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-lg font-semibold">Upload exam paper</h2>
+                <button
+                  type="button"
+                  onClick={() => setUploadOpen(false)}
+                  className="rounded-sm text-muted-foreground opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <X className="h-4 w-4" />
+                  <span className="sr-only">Close</span>
+                </button>
               </div>
-            </form>
-          </DialogContent>
-        </Dialog>
+              <form onSubmit={handleUpload} className="space-y-3">
+                <input
+                  value={uploadTitle} onChange={(e) => setUploadTitle(e.target.value)}
+                  placeholder="Paper title (e.g. 2023 Final Exam)"
+                  className="flex h-10 w-full rounded-md border border-border bg-input px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+                <input
+                  type="file" accept=".txt,.pdf,.png,.jpg,.jpeg"
+                  onChange={(e) => setUploadFile(e.target.files?.[0] ?? null)}
+                  className="block w-full text-sm text-muted-foreground file:mr-4 file:rounded-md file:border-0 file:bg-accent file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-accent-foreground"
+                />
+                {uploadError && (
+                  <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{uploadError}</p>
+                )}
+                <div className="flex justify-end gap-2 pt-1">
+                  <Button type="button" variant="outline" onClick={() => setUploadOpen(false)}>Cancel</Button>
+                  <Button type="submit" disabled={uploading}>
+                    {uploading ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />Uploading…</> : "Upload"}
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
 
         {uploads.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
