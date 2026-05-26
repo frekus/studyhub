@@ -2205,7 +2205,6 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
             >
               {icon}
               <span className="hidden sm:inline">{label}</span>
-              <span className="sm:hidden text-xs">{label}</span>
             </button>
           ))}
         </div>
