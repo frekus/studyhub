@@ -95,18 +95,23 @@ export function AvatarDropdown({ email, plan }: Props) {
                 {label}
               </Link>
             ))}
-
-            {isAdmin && (
-              <Link
-                href="/admin"
-                onClick={() => setOpen(false)}
-                className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-orange-400 transition-colors hover:bg-orange-500/10"
-              >
-                <ShieldCheck className="h-4 w-4" />
-                Admin Console
-              </Link>
-            )}
           </div>
+
+          {isAdmin && (
+            <>
+              <div className="border-t border-border/60" />
+              <div className="p-1">
+                <Link
+                  href="/admin"
+                  onClick={() => setOpen(false)}
+                  className="flex items-center gap-2.5 rounded-lg border-l-2 border-l-teal-500/70 pl-2.5 pr-3 py-2 text-sm font-medium text-teal-600 dark:text-teal-400 transition-colors hover:bg-teal-500/8"
+                >
+                  <ShieldCheck className="h-4 w-4 shrink-0" />
+                  Admin Console
+                </Link>
+              </div>
+            </>
+          )}
 
           <div className="border-t border-border/60" />
 

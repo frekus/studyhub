@@ -50,14 +50,19 @@ export async function middleware(request: NextRequest) {
         .eq("id", user.id)
         .maybeSingle();
 
-      const isExpired = userRow?.admin_expires_at
-        ? new Date(userRow.admin_expires_at as string) < new Date()
-        : false;
+      // Only redirect if we can positively confirm the user is not an admin.
+      // If userRow is null (migration pending or user not in table), fall through
+      // so the page's own /api/admin/check call handles the verification.
+      if (userRow) {
+        const isExpired = userRow.admin_expires_at
+          ? new Date(userRow.admin_expires_at as string) < new Date()
+          : false;
 
-      if (!userRow?.is_admin || isExpired) {
-        const dashboardUrl = request.nextUrl.clone();
-        dashboardUrl.pathname = "/dashboard";
-        return NextResponse.redirect(dashboardUrl);
+        if (!userRow.is_admin || isExpired) {
+          const dashboardUrl = request.nextUrl.clone();
+          dashboardUrl.pathname = "/dashboard";
+          return NextResponse.redirect(dashboardUrl);
+        }
       }
     } catch {
       // If the column doesn't exist yet (migration pending), fall through —
