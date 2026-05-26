@@ -2095,7 +2095,7 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
           <div className="flex items-center gap-3">
             <Link href="/" className="flex items-center gap-2 transition-opacity hover:opacity-80">
               <BookOpen className="h-5 w-5 text-orange-400" />
-              <span className="font-bold text-orange-400">StudyHub</span>
+              <span className="hidden sm:inline font-bold text-orange-400">StudyHub</span>
             </Link>
             <Link
               href="/"
