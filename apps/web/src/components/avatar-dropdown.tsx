@@ -2,15 +2,16 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { LayoutDashboard, Settings, CreditCard, LogOut } from "lucide-react";
+import { LayoutDashboard, Settings, CreditCard, LogOut, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Props {
   email: string;
   plan?: string;
+  isAdmin?: boolean;
 }
 
-export function AvatarDropdown({ email, plan }: Props) {
+export function AvatarDropdown({ email, plan, isAdmin }: Props) {
   const [open, setOpen]             = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const containerRef                = useRef<HTMLDivElement>(null);
@@ -88,6 +89,22 @@ export function AvatarDropdown({ email, plan }: Props) {
               </Link>
             ))}
           </div>
+
+          {isAdmin && (
+            <>
+              <div className="border-t border-border/60" />
+              <div className="p-1">
+                <Link
+                  href="/admin"
+                  onClick={() => setOpen(false)}
+                  className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-orange-400 transition-colors hover:bg-muted"
+                >
+                  <ShieldCheck className="h-4 w-4" />
+                  Admin Console
+                </Link>
+              </div>
+            </>
+          )}
 
           <div className="border-t border-border/60" />
 

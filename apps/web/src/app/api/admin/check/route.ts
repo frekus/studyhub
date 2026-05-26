@@ -7,28 +7,25 @@ export async function GET() {
   const { user, authErr } = await requireUser(supabase);
   if (authErr) return ok({ isAdmin: false });
 
-  const admin = createAdminClient();
-  // admin_role / is_admin are not yet in generated types — cast via any
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data } = await (admin as any)
-    .from("users")
-    .select("is_admin, admin_role, admin_expires_at")
-    .eq("id", user.id)
-    .maybeSingle();
+  try {
+    const admin = createAdminClient();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data } = await (admin as any)
+      .from("admin_users")
+      .select("role, expires_at")
+      .eq("user_id", user.id)
+      .maybeSingle();
 
-  const d = data as {
-    is_admin: boolean;
-    admin_role: string | null;
-    admin_expires_at: string | null;
-  } | null;
+    if (!data) return ok({ isAdmin: false });
 
-  if (!d?.is_admin) return ok({ isAdmin: false, role: null });
+    const isExpired = data.expires_at
+      ? new Date(data.expires_at as string) < new Date()
+      : false;
 
-  const isExpired = d.admin_expires_at
-    ? new Date(d.admin_expires_at) < new Date()
-    : false;
+    if (isExpired) return ok({ isAdmin: false });
 
-  if (isExpired) return ok({ isAdmin: false, role: null });
-
-  return ok({ isAdmin: true, role: d.admin_role ?? "admin" });
+    return ok({ isAdmin: true, role: (data.role as string) ?? "admin" });
+  } catch {
+    return ok({ isAdmin: false });
+  }
 }

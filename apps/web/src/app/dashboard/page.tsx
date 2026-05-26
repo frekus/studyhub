@@ -1059,6 +1059,7 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
   const [upgradeModalMessage, setUpgradeModalMessage] = useState("");
   const [cancelSubOpen, setCancelSubOpen]         = useState(false);
   const [cancellingSub, setCancellingSub] = useState(false);
+  const [isAdmin, setIsAdmin]             = useState(false);
 
   // Study mode state
   const [studyMode, setStudyMode]               = useState(false);
@@ -1197,7 +1198,7 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
   useEffect(() => {
     async function init() {
       try {
-        const [meRes, notesRes, groupsRes, examsRes, subRes, foldersRes, streaksRes, notifsRes] = await Promise.all([
+        const [meRes, notesRes, groupsRes, examsRes, subRes, foldersRes, streaksRes, notifsRes, adminRes] = await Promise.all([
           fetch("/api/auth/me"),
           fetch("/api/notes"),
           fetch("/api/groups"),
@@ -1206,6 +1207,7 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
           fetch("/api/folders"),
           fetch("/api/streaks"),
           fetch("/api/notifications"),
+          fetch("/api/admin/check", { credentials: "include" }),
         ]);
 
         if (!meRes.ok) { router.replace("/login"); return; }
@@ -1251,6 +1253,11 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
         if (notifsRes.ok) {
           const j = await notifsRes.json() as { data?: { notifications: Notification[]; unread_count: number } };
           if (j.data) { setNotifications(j.data.notifications ?? []); setUnreadCount(j.data.unread_count ?? 0); }
+        }
+
+        if (adminRes.ok) {
+          const j = await adminRes.json() as { data?: { isAdmin?: boolean } };
+          if (j.data?.isAdmin) setIsAdmin(true);
         }
 
         if (!localStorage.getItem("studyhub_onboarding_complete")) {
@@ -1695,7 +1702,7 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
                 <HelpCircle className="h-4 w-4" />
               </Button>
             </Tooltip>
-            <AvatarDropdown email={user?.email ?? ""} plan={subscription?.tier} />
+            <AvatarDropdown email={user?.email ?? ""} plan={subscription?.tier} isAdmin={isAdmin} />
           </div>
         </div>
       </header>

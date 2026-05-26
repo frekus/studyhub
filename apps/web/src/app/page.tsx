@@ -124,6 +124,7 @@ const FAQS = [
 export default function LandingPage() {
   const [isLoggedIn, setIsLoggedIn]     = useState(false);
   const [userEmail, setUserEmail]       = useState("");
+  const [isAdmin, setIsAdmin]           = useState(false);
   const [mobileOpen, setMobileOpen]     = useState(false);
   const [billing, setBilling]           = useState<BillingCycle>("monthly");
   const [openFaq, setOpenFaq]           = useState<number | null>(null);
@@ -137,6 +138,10 @@ export default function LandingPage() {
         if (data?.data?.user?.id) {
           setIsLoggedIn(true);
           setUserEmail(data.data.user.email ?? "");
+          fetch("/api/admin/check", { credentials: "include" })
+            .then((r) => r.json())
+            .then((d: { data?: { isAdmin?: boolean } }) => { if (d?.data?.isAdmin) setIsAdmin(true); })
+            .catch(() => {});
         }
       })
       .catch(() => {});
@@ -220,7 +225,7 @@ export default function LandingPage() {
                 <Button variant="outline" size="sm" asChild>
                   <Link href="/dashboard">Dashboard</Link>
                 </Button>
-                <AvatarDropdown email={userEmail} />
+                <AvatarDropdown email={userEmail} isAdmin={isAdmin} />
               </>
             ) : (
               <>
