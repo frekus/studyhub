@@ -7,6 +7,9 @@ import { checkLimit, incrementUsage } from "@/lib/usage";
 import { recordStudyActivity } from "@/lib/streaks";
 import type { ExamUploadRow } from "@studyhub/database";
 
+// App Router equivalent of { api: { bodyParser: false } } — not needed here
+// because request.formData() bypasses Next.js's built-in JSON body parser.
+// maxDuration raises the Vercel function timeout above the 10 s default.
 export const maxDuration = 60;
 
 const SUPPORTED_EXTENSIONS = new Set([".txt", ".pdf", ".png", ".jpg", ".jpeg"]);
@@ -81,11 +84,13 @@ async function extractText(file: File): Promise<string> {
 }
 
 export async function POST(request: Request) {
+  console.log("Upload started");
+
   const supabase = await createClient();
   const { user, authErr } = await requireUser(supabase);
   if (authErr) return authErr;
 
-  console.log("[exams] POST start — user:", user.id);
+  console.log("User:", user.id);
 
   let formData: FormData;
   try {
@@ -107,7 +112,7 @@ export async function POST(request: Request) {
   }
 
   const ext = fileExtension(file.name);
-  console.log("[exams] File:", file.name, "size:", file.size, "ext:", ext);
+  console.log("File received:", file.name, file.size, "— ext:", ext);
 
   if (!SUPPORTED_EXTENSIONS.has(ext)) {
     return err("Unsupported file type. Allowed: .txt, .pdf, .png, .jpg, .jpeg", 400);
@@ -145,12 +150,11 @@ export async function POST(request: Request) {
     .select()
     .single();
 
+  console.log("Supabase upload result:", exam, error);
+
   if (error) {
-    console.error("[exams] DB insert failed:", error);
     return err(error.message, 500);
   }
-
-  console.log("[exams] Exam created:", exam.id);
 
   void incrementUsage(user.id, "exam_predictions", supabase);
   await tryDel(cacheKeys.examsList(user.id));
