@@ -41,40 +41,32 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Temporary hardcoded bypass: these emails always get through to /admin
-  // regardless of the profiles RLS or is_admin column state.
-  const SUPER_ADMINS = ["kufrekus4@gmail.com"];
-
-  // For /admin routes, verify the user is still an active admin.
+  // For /admin routes, verify the user has a valid row in admin_users.
   if (user && pathname.startsWith("/admin")) {
-    if (SUPER_ADMINS.includes(user.email ?? "")) {
-      return supabaseResponse;
-    }
-
     try {
-      const { data: userRow } = await supabase
-        .from("users")
-        .select("is_admin, admin_expires_at")
-        .eq("id", user.id)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data } = await (supabase as any)
+        .from("admin_users")
+        .select("role, expires_at")
+        .eq("user_id", user.id)
         .maybeSingle();
 
       // Only redirect if we can positively confirm the user is not an admin.
-      // If userRow is null (migration pending or user not in table), fall through
-      // so the page's own /api/admin/check call handles the verification.
-      if (userRow) {
-        const isExpired = userRow.admin_expires_at
-          ? new Date(userRow.admin_expires_at as string) < new Date()
+      // If data is null (RLS blocking the read or no row), fall through —
+      // the page's own /api/admin/check will handle verification.
+      if (data) {
+        const isExpired = data.expires_at
+          ? new Date(data.expires_at as string) < new Date()
           : false;
 
-        if (!userRow.is_admin || isExpired) {
+        if (!data.role || isExpired) {
           const dashboardUrl = request.nextUrl.clone();
           dashboardUrl.pathname = "/dashboard";
           return NextResponse.redirect(dashboardUrl);
         }
       }
     } catch {
-      // If the column doesn't exist yet (migration pending), fall through —
-      // the API-level requireAdmin check will still enforce access.
+      // Non-fatal — fall through to the page-level check.
     }
   }
 
