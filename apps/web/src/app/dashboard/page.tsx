@@ -26,7 +26,9 @@ import {
   Folder, FolderOpen, Brain, Target, Star, FolderInput,
   Pencil, Check, X as XIcon, Bell,
   Calendar, Clock, RotateCcw, History, ThumbsDown, ThumbsUp,
+  Bot, Home, Paperclip, Sparkles, Send,
 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 import { AvatarDropdown } from "@/components/avatar-dropdown";
 import { cn } from "@/lib/utils";
 
@@ -143,6 +145,23 @@ interface NoteVersion {
   title: string;
   created_at: string;
   content_preview: string | null;
+}
+
+interface AiConversation {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface AiMessage {
+  id: string;
+  conversation_id: string;
+  user_id: string;
+  role: "user" | "assistant";
+  content: string;
+  attachments: string[];
+  created_at: string;
 }
 
 interface User {
@@ -678,7 +697,7 @@ function UpgradeModal({ open, message, onClose }: { open: boolean; message: stri
 // NoteCard
 // ---------------------------------------------------------------------------
 
-function NoteCard({ note, flashcardCount, folder, folders, onDelete, onStudy, onMove, onHistory }: {
+function NoteCard({ note, flashcardCount, folder, folders, onDelete, onStudy, onMove, onHistory, onGenerateMore }: {
   note: Note;
   flashcardCount: number | undefined;
   folder?: Folder;
@@ -687,6 +706,7 @@ function NoteCard({ note, flashcardCount, folder, folders, onDelete, onStudy, on
   onStudy: (noteId: string, noteTitle: string) => void;
   onMove: (note: Note) => void;
   onHistory: (note: Note) => void;
+  onGenerateMore?: (noteId: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -753,7 +773,7 @@ function NoteCard({ note, flashcardCount, folder, folders, onDelete, onStudy, on
             </button>
           </Tooltip>
           <Tooltip label="Delete note">
-            <button onClick={() => setConfirmOpen(true)} className="rounded p-1 text-muted-foreground opacity-0 transition-opacity duration-200 group-hover:opacity-100 hover:text-destructive" aria-label="Delete note">
+            <button onClick={() => setConfirmOpen(true)} className="rounded p-1 text-muted-foreground transition-opacity duration-200 sm:opacity-0 sm:group-hover:opacity-100 hover:text-destructive" aria-label="Delete note">
               <Trash2 className="h-4 w-4" />
             </button>
           </Tooltip>
@@ -761,8 +781,16 @@ function NoteCard({ note, flashcardCount, folder, folders, onDelete, onStudy, on
       </div>
       {note.ai_summary ? (
         <>
-          <p className="mt-3 rounded-md bg-orange-500/10 px-3 py-2 text-sm text-orange-400">{note.ai_summary}</p>
           <div className="mt-3">
+            <Tooltip label="Automatically generated when you save a note">
+              <span className="inline-flex items-center gap-1 rounded-full bg-accent/15 px-2 py-0.5 text-xs font-medium text-accent">
+                <Sparkles className="h-3 w-3" />
+                Auto AI Summary
+              </span>
+            </Tooltip>
+          </div>
+          <p className="mt-1.5 rounded-md bg-orange-500/10 px-3 py-2 text-sm text-orange-400">{note.ai_summary}</p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
             <Button variant="outline" size="sm" className="gap-1.5" onClick={() => onStudy(note.id, note.title)}>
               <Layers className="h-3.5 w-3.5" />
               Flashcards
@@ -772,6 +800,14 @@ function NoteCard({ note, flashcardCount, folder, folders, onDelete, onStudy, on
                 </span>
               )}
             </Button>
+            {flashcardCount !== undefined && flashcardCount > 0 && onGenerateMore && (
+              <button
+                onClick={() => onGenerateMore(note.id)}
+                className="flex items-center gap-1 text-xs text-accent hover:underline"
+              >
+                <Plus className="h-3 w-3" />Generate more
+              </button>
+            )}
           </div>
         </>
       ) : (
@@ -802,9 +838,33 @@ function NewNoteDialog({ onCreated, open, onOpenChange, onLimitReached, folders,
   const [folderId, setFolderId]   = useState<string | null>(initialFolderId ?? null);
   const [error, setError]         = useState("");
   const [loading, setLoading]     = useState(false);
+  const [extracting, setExtracting] = useState(false);
+  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
 
   // Sync folderId when initialFolderId changes (e.g. user selects folder then opens dialog)
   useEffect(() => { setFolderId(initialFolderId ?? null); }, [initialFolderId, open]);
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setExtracting(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/notes/extract-file", { method: "POST", body: formData });
+      const j = await res.json() as { data?: { content: string }; error?: string };
+      if (res.ok && j.data?.content) {
+        setContent((prev) => prev ? `${prev}\n\n${j.data!.content}` : j.data!.content);
+        setUploadedFileName(file.name);
+      } else {
+        setError(j.error ?? "Failed to extract file content");
+      }
+    } catch { setError("Network error extracting file"); }
+    finally {
+      setExtracting(false);
+      e.target.value = "";
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -838,7 +898,32 @@ function NewNoteDialog({ onCreated, open, onOpenChange, onLimitReached, folders,
             <Input id="note-title" placeholder="e.g. Chapter 3 — Cellular Respiration" value={title} onChange={(e) => setTitle(e.target.value)} required />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="note-content">Content</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="note-content">Content</Label>
+              <label className="flex cursor-pointer items-center gap-1.5 text-xs text-accent hover:underline">
+                <Paperclip className="h-3.5 w-3.5" />
+                Upload document
+                <input
+                  type="file"
+                  className="hidden"
+                  accept=".txt,.pdf,.png,.jpg,.jpeg"
+                  onChange={handleFileUpload}
+                  disabled={extracting}
+                />
+              </label>
+            </div>
+            {extracting && (
+              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Extracting text from document…
+              </p>
+            )}
+            {uploadedFileName && !extracting && (
+              <p className="flex items-center gap-1.5 text-xs text-green-400">
+                <Check className="h-3 w-3" />
+                Extracted: {uploadedFileName}
+              </p>
+            )}
             <Textarea id="note-content" placeholder="Write your study notes here…" value={content} onChange={(e) => setContent(e.target.value)} required />
           </div>
           {hasFolders && (
@@ -968,7 +1053,7 @@ function GroupCard({ group }: { group: Group }) {
 // PredictionCard
 // ---------------------------------------------------------------------------
 
-function PredictionCard({ prediction }: { prediction: Prediction }) {
+function PredictionCard({ prediction, onAskAI }: { prediction: Prediction; onAskAI?: (q: string) => void }) {
   const [expanded, setExpanded] = useState(false);
 
   const likelihoodStyles = {
@@ -988,13 +1073,24 @@ function PredictionCard({ prediction }: { prediction: Prediction }) {
           {prediction.likelihood} likelihood
         </span>
       </div>
-      <button
-        onClick={() => setExpanded((v) => !v)}
-        className="mt-3 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-      >
-        <ChevronRight className={cn("h-3 w-3 transition-transform", expanded && "rotate-90")} />
-        Why this question?
-      </button>
+      <div className="mt-3 flex items-center gap-3">
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ChevronRight className={cn("h-3 w-3 transition-transform", expanded && "rotate-90")} />
+          Why this question?
+        </button>
+        {onAskAI && (
+          <button
+            onClick={() => onAskAI(prediction.question)}
+            className="flex items-center gap-1 text-xs text-accent hover:underline"
+          >
+            <Bot className="h-3 w-3" />
+            Ask AI for answer
+          </button>
+        )}
+      </div>
       {expanded && (
         <p className="mt-2 rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground leading-relaxed">
           {prediction.explanation}
@@ -1008,7 +1104,7 @@ function PredictionCard({ prediction }: { prediction: Prediction }) {
 // PredictionsModal
 // ---------------------------------------------------------------------------
 
-function PredictionsModal({ exam }: { exam: Exam }) {
+function PredictionsModal({ exam, onAskAI }: { exam: Exam; onAskAI?: (q: string) => void }) {
   const [open, setOpen] = useState(false);
   const predictions = exam.predictions ?? [];
 
@@ -1028,7 +1124,9 @@ function PredictionsModal({ exam }: { exam: Exam }) {
           {predictions.length} predicted question{predictions.length !== 1 ? "s" : ""}. Click "Why this question?" to see the reasoning.
         </p>
         <div className="mt-4 space-y-3">
-          {predictions.map((p, i) => <PredictionCard key={i} prediction={p} />)}
+          {predictions.map((p, i) => (
+            <PredictionCard key={i} prediction={p} onAskAI={onAskAI} />
+          ))}
         </div>
       </DialogContent>
     </Dialog>
@@ -1039,7 +1137,7 @@ function PredictionsModal({ exam }: { exam: Exam }) {
 // ExamCard
 // ---------------------------------------------------------------------------
 
-function ExamCard({ exam, onDelete }: { exam: Exam; onDelete: (id: string) => void }) {
+function ExamCard({ exam, onDelete, onAskAI }: { exam: Exam; onDelete: (id: string) => void; onAskAI?: (q: string) => void }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting]       = useState(false);
 
@@ -1084,7 +1182,7 @@ function ExamCard({ exam, onDelete }: { exam: Exam; onDelete: (id: string) => vo
                 <XCircle className="h-3.5 w-3.5" />Failed
               </span>
             )}
-            {exam.status === "ready" && <PredictionsModal exam={exam} />}
+            {exam.status === "ready" && <PredictionsModal exam={exam} onAskAI={onAskAI} />}
             <button
               onClick={() => setConfirmOpen(true)}
               className="rounded p-1 text-muted-foreground opacity-0 transition-opacity duration-200 group-hover:opacity-100 hover:text-destructive"
@@ -1103,7 +1201,7 @@ function ExamCard({ exam, onDelete }: { exam: Exam; onDelete: (id: string) => vo
 // DashboardPage
 // ---------------------------------------------------------------------------
 
-function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams" | "planner" }) {
+function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams" | "planner" | "ai" }) {
   const router       = useRouter();
   const [user, setUser]           = useState<User | null>(null);
   const [notes, setNotes]         = useState<Note[]>([]);
@@ -1113,7 +1211,7 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
   const [uncategorizedCount, setUncategorizedCount] = useState(0);
   const [selectedFolderId, setSelectedFolderId]     = useState<string | null>(null);
   const [moveNoteTarget, setMoveNoteTarget]         = useState<Note | null>(null);
-  const [tab, setTab]             = useState<"notes" | "groups" | "exams" | "planner">(initialTab);
+  const [tab, setTab]             = useState<"notes" | "groups" | "exams" | "planner" | "ai">(initialTab);
   const [newNoteOpen, setNewNoteOpen]             = useState(false);
   const [onboardingOpen, setOnboardingOpen]       = useState(false);
   const [subscription, setSubscription]           = useState<Subscription | null>(null);
@@ -1155,6 +1253,11 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
   const [versionsLoading, setVersionsLoading]       = useState(false);
   const [versionPreview, setVersionPreview]         = useState<{ version_number: number; title: string; content: string | null } | null>(null);
   const [restoringVersion, setRestoringVersion]     = useState<number | null>(null);
+
+  // AI Assistant state
+  const [aiConversations, setAiConversations]     = useState<AiConversation[]>([]);
+  const [prefilledQuestion, setPrefilledQuestion] = useState<string | null>(null);
+  const [generatingMore, setGeneratingMore]       = useState(false);
 
   // Streak state
   const [streak, setStreak]             = useState<StreakData | null>(null);
@@ -1284,7 +1387,7 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
   useEffect(() => {
     async function init() {
       try {
-        const [meRes, notesRes, groupsRes, examsRes, subRes, foldersRes, streaksRes, notifsRes, adminRes, plansRes, weakRes, dueRes] = await Promise.all([
+        const [meRes, notesRes, groupsRes, examsRes, subRes, foldersRes, streaksRes, notifsRes, adminRes, plansRes, weakRes, dueRes, aiConvsRes] = await Promise.all([
           fetch("/api/auth/me"),
           fetch("/api/notes"),
           fetch("/api/groups"),
@@ -1297,6 +1400,7 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
           fetch("/api/plans"),
           fetch("/api/flashcards/weak-areas"),
           fetch("/api/flashcards/due"),
+          fetch("/api/ai/conversations"),
         ]);
 
         if (!meRes.ok) { router.replace("/login"); return; }
@@ -1362,6 +1466,11 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
         if (dueRes.ok) {
           const j = await dueRes.json() as { data?: { dueCards: DueCard[] } };
           if (Array.isArray(j.data?.dueCards)) setDueCards(j.data.dueCards);
+        }
+
+        if (aiConvsRes.ok) {
+          const j = await aiConvsRes.json() as { data?: { conversations: AiConversation[] } };
+          if (Array.isArray(j.data?.conversations)) setAiConversations(j.data.conversations);
         }
 
         if (!localStorage.getItem("studyhub_onboarding_complete")) {
@@ -1576,6 +1685,49 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
     if (selectedPlan?.id === planId) setSelectedPlan(null);
   }
 
+  async function handleGenerateMore() {
+    if (!studyNoteId) return;
+    setGeneratingMore(true);
+    try {
+      const res = await fetch(`/api/notes/${studyNoteId}/flashcards/more`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const json = await res.json() as { data?: { flashcards: Flashcard[] } };
+      if (json.data?.flashcards && json.data.flashcards.length > 0) {
+        const newCards = json.data.flashcards;
+        const firstNewIdx = studyFlashcards.length;
+        setStudyFlashcards((prev) => [...prev, ...newCards]);
+        setFlashcardsMap((prev) => ({
+          ...prev,
+          [studyNoteId]: [...(prev[studyNoteId] ?? []), ...newCards],
+        }));
+        setCurrentCard(firstNewIdx);
+        setFlipped(false);
+        setSessionDone(false);
+        answeredCardsRef.current = new Set();
+        setSessionCorrect(0);
+        setSessionIncorrect(0);
+      }
+    } finally {
+      setGeneratingMore(false);
+    }
+  }
+
+  async function handleGenerateMoreForNote(noteId: string) {
+    const res = await fetch(`/api/notes/${noteId}/flashcards/more`, {
+      method: "POST",
+      credentials: "include",
+    });
+    const json = await res.json() as { data?: { flashcards: Flashcard[] } };
+    if (json.data?.flashcards && json.data.flashcards.length > 0) {
+      setFlashcardsMap((prev) => ({
+        ...prev,
+        [noteId]: [...(prev[noteId] ?? []), ...json.data!.flashcards],
+      }));
+    }
+  }
+
   function startPlanPoll(planId: string) {
     if (planPollRef.current) clearInterval(planPollRef.current);
     let elapsed = 0;
@@ -1741,13 +1893,25 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
           <h2 className="text-2xl font-bold">Session Complete!</h2>
           <p className="text-4xl font-bold text-accent">{sessionCorrect}/{totalAnswered} correct</p>
           <p className="text-muted-foreground">{msg}</p>
-          <div className="flex gap-3">
+          <div className="flex flex-wrap justify-center gap-3">
             <button onClick={() => { setSessionDone(false); setCurrentCard(0); setFlipped(false); answeredCardsRef.current = new Set(); setSessionCorrect(0); setSessionIncorrect(0); }}
               className="rounded-xl border border-border px-6 py-3 text-sm font-medium hover:bg-muted">
-              Study Again
+              🔄 Study Again
             </button>
+            {studyNoteId && (
+              <button
+                onClick={() => void handleGenerateMore()}
+                disabled={generatingMore}
+                className="rounded-xl bg-accent px-6 py-3 text-sm font-medium text-accent-foreground disabled:opacity-50"
+              >
+                {generatingMore
+                  ? <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Generating…</span>
+                  : "➕ Generate 5 More"
+                }
+              </button>
+            )}
             <button onClick={() => setStudyMode(false)}
-              className="rounded-xl bg-accent px-6 py-3 text-sm font-medium text-accent-foreground">
+              className="rounded-xl border border-border px-6 py-3 text-sm font-medium hover:bg-muted">
               Done
             </button>
           </div>
@@ -1928,10 +2092,19 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
       {/* Header */}
       <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur-sm px-6 py-4">
         <div className="mx-auto flex max-w-4xl items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 transition-opacity hover:opacity-80">
-            <BookOpen className="h-5 w-5 text-orange-400" />
-            <span className="font-bold text-orange-400">StudyHub</span>
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link href="/" className="flex items-center gap-2 transition-opacity hover:opacity-80">
+              <BookOpen className="h-5 w-5 text-orange-400" />
+              <span className="font-bold text-orange-400">StudyHub</span>
+            </Link>
+            <Link
+              href="/"
+              className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <Home className="h-4 w-4" />
+              <span className="hidden sm:inline">Home</span>
+            </Link>
+          </div>
           <div className="flex items-center gap-2">
             {subscription?.tier === "free" && (
               <Button size="sm" className="hidden gap-1.5 bg-orange-500 text-white hover:bg-orange-600 sm:flex" asChild>
@@ -2017,6 +2190,7 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
               { id: "groups",  label: "Groups",  icon: <Users className="h-4 w-4" /> },
               { id: "exams",   label: "Exams",   icon: <GraduationCap className="h-4 w-4" /> },
               { id: "planner", label: "Planner", icon: <Calendar className="h-4 w-4" /> },
+              { id: "ai",      label: "AI",      icon: <Bot className="h-4 w-4" /> },
             ] as const
           ).map(({ id, label, icon }) => (
             <button
@@ -2243,6 +2417,7 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
                           onStudy={openStudyMode}
                           onMove={setMoveNoteTarget}
                           onHistory={openVersionHistory}
+                          onGenerateMore={handleGenerateMoreForNote}
                         />
                       ))}
                     </div>
@@ -2385,7 +2560,14 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {exams.map((exam) => <ExamCard key={exam.id} exam={exam} onDelete={handleExamDeleted} />)}
+                  {exams.map((exam) => (
+                    <ExamCard
+                      key={exam.id}
+                      exam={exam}
+                      onDelete={handleExamDeleted}
+                      onAskAI={(q) => { setPrefilledQuestion(q); setTab("ai"); }}
+                    />
+                  ))}
                 </div>
               )}
             </div>
@@ -2411,6 +2593,17 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
             onPlanBack={() => setSelectedPlan(null)}
             onDayToggle={togglePlanDay}
             onPlanDelete={deletePlan}
+          />
+        )}
+
+        {/* ── AI Assistant tab ── */}
+        {tab === "ai" && (
+          <AIAssistantTab
+            notes={notes}
+            initialConversations={aiConversations}
+            prefilledQuestion={prefilledQuestion}
+            onClearPrefilledQuestion={() => setPrefilledQuestion(null)}
+            onConversationsChange={setAiConversations}
           />
         )}
 
@@ -2887,14 +3080,377 @@ function VersionHistorySlideOver({ note, versions, loading, preview, restoringVe
 }
 
 // ---------------------------------------------------------------------------
+// AIAssistantTab
+// ---------------------------------------------------------------------------
+
+function AIAssistantTab({
+  notes, initialConversations, prefilledQuestion, onClearPrefilledQuestion, onConversationsChange,
+}: {
+  notes: Note[];
+  initialConversations: AiConversation[];
+  prefilledQuestion: string | null;
+  onClearPrefilledQuestion: () => void;
+  onConversationsChange: (convs: AiConversation[]) => void;
+}) {
+  const [conversations, setConversations] = useState<AiConversation[]>(initialConversations);
+  const [activeConvId, setActiveConvId]   = useState<string | null>(null);
+  const [messages, setMessages]           = useState<AiMessage[]>([]);
+  const [input, setInput]                 = useState("");
+  const [sending, setSending]             = useState(false);
+  const [attachedNoteIds, setAttachedNoteIds]       = useState<string[]>([]);
+  const [attachedFileName, setAttachedFileName]     = useState<string | null>(null);
+  const [attachedFileContent, setAttachedFileContent] = useState<string | null>(null);
+  const [notePickerOpen, setNotePickerOpen] = useState(false);
+  const [convLoading, setConvLoading]       = useState(false);
+  const [extracting, setExtracting]         = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Keep parent in sync
+  function syncConversations(next: AiConversation[]) {
+    setConversations(next);
+    onConversationsChange(next);
+  }
+
+  // When prefilledQuestion arrives, reset and pre-fill input
+  useEffect(() => {
+    if (prefilledQuestion) {
+      setInput(`Give me a detailed exam answer to: ${prefilledQuestion}`);
+      setActiveConvId(null);
+      setMessages([]);
+      onClearPrefilledQuestion();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefilledQuestion]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, sending]);
+
+  async function loadConversation(convId: string) {
+    setConvLoading(true);
+    setActiveConvId(convId);
+    try {
+      const res = await fetch(`/api/ai/conversations/${convId}`);
+      if (!res.ok) return;
+      const j = await res.json() as { data?: { messages: AiMessage[] } };
+      setMessages(j.data?.messages ?? []);
+    } finally { setConvLoading(false); }
+  }
+
+  async function handleSend() {
+    if (!input.trim() || sending) return;
+    const msgText = input.trim();
+    setInput("");
+    setSending(true);
+
+    const tempId = `temp-${Date.now()}`;
+    setMessages((prev) => [
+      ...prev,
+      { id: tempId, conversation_id: activeConvId ?? "", user_id: "", role: "user", content: msgText, attachments: [], created_at: new Date().toISOString() },
+    ]);
+
+    try {
+      const res = await fetch("/api/ai/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversationId: activeConvId, message: msgText, attachedNoteIds, attachedFileContent }),
+      });
+      const j = await res.json() as { data?: { conversationId: string; message: string } };
+      if (!res.ok) { setMessages((prev) => prev.filter((m) => m.id !== tempId)); return; }
+
+      const { conversationId: convId, message: aiMsg } = j.data!;
+
+      if (!activeConvId) {
+        setActiveConvId(convId);
+        const convsRes = await fetch("/api/ai/conversations");
+        const cj = await convsRes.json() as { data?: { conversations: AiConversation[] } };
+        syncConversations(cj.data?.conversations ?? []);
+      } else {
+        // Refresh the conversation's updated_at in the sidebar list
+        syncConversations(conversations.map((c) =>
+          c.id === convId ? { ...c, updated_at: new Date().toISOString() } : c
+        ));
+      }
+
+      setMessages((prev) => {
+        const withoutTemp = prev.filter((m) => m.id !== tempId);
+        const ts = new Date().toISOString();
+        return [
+          ...withoutTemp,
+          { id: `u-${Date.now()}`, conversation_id: convId, user_id: "", role: "user" as const, content: msgText, attachments: [], created_at: ts },
+          { id: `a-${Date.now()}`, conversation_id: convId, user_id: "", role: "assistant" as const, content: aiMsg, attachments: [], created_at: ts },
+        ];
+      });
+
+      setAttachedNoteIds([]);
+      setAttachedFileContent(null);
+      setAttachedFileName(null);
+    } finally { setSending(false); }
+  }
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setExtracting(true);
+    try {
+      const fd = new FormData(); fd.append("file", file);
+      const res = await fetch("/api/notes/extract-file", { method: "POST", body: fd });
+      const j = await res.json() as { data?: { content: string } };
+      if (res.ok && j.data?.content) { setAttachedFileContent(j.data.content); setAttachedFileName(file.name); }
+    } finally { setExtracting(false); e.target.value = ""; }
+  }
+
+  async function deleteConversation(convId: string) {
+    await fetch(`/api/ai/conversations/${convId}`, { method: "DELETE" });
+    syncConversations(conversations.filter((c) => c.id !== convId));
+    if (activeConvId === convId) { setActiveConvId(null); setMessages([]); }
+  }
+
+  function newConversation() {
+    setActiveConvId(null);
+    setMessages([]);
+    setInput("");
+    setAttachedNoteIds([]);
+    setAttachedFileContent(null);
+    setAttachedFileName(null);
+  }
+
+  const SUGGESTIONS = [
+    "Explain a concept from my notes",
+    "Help me answer an exam question",
+    "Quiz me on my weakest topics",
+    "Summarise what I need to study",
+  ];
+
+  const hasContent = activeConvId !== null || messages.length > 0;
+
+  return (
+    <div className="flex h-[calc(100vh-220px)] min-h-[500px] overflow-hidden rounded-xl border border-border bg-card">
+      {/* Left panel — conversation list */}
+      <div className="hidden w-60 shrink-0 flex-col border-r border-border sm:flex">
+        <div className="shrink-0 border-b border-border p-3">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">💬 Conversations</p>
+          <button
+            onClick={newConversation}
+            className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border px-3 py-2 text-xs text-muted-foreground transition-colors hover:border-accent hover:text-accent"
+          >
+            <Plus className="h-3.5 w-3.5" />New Chat
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-2">
+          {conversations.length === 0 ? (
+            <p className="p-3 text-center text-xs text-muted-foreground">No conversations yet</p>
+          ) : conversations.map((conv) => (
+            <div
+              key={conv.id}
+              className={cn(
+                "group/conv mb-1 flex cursor-pointer items-start justify-between rounded-lg p-2.5 transition-colors",
+                activeConvId === conv.id ? "bg-accent/10 text-accent" : "hover:bg-muted",
+              )}
+              onClick={() => void loadConversation(conv.id)}
+            >
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-medium">{conv.title}</p>
+                <p className="mt-0.5 text-[10px] text-muted-foreground">
+                  {new Date(conv.updated_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                </p>
+              </div>
+              <button
+                onClick={(e) => { e.stopPropagation(); void deleteConversation(conv.id); }}
+                className="ml-1 mt-0.5 shrink-0 opacity-0 transition-opacity group-hover/conv:opacity-100 text-muted-foreground hover:text-destructive"
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Right panel — chat area */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        {!hasContent ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-6 p-6">
+            <div className="flex flex-col items-center gap-3 text-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-accent/10">
+                <Bot className="h-8 w-8 text-accent" />
+              </div>
+              <h2 className="text-xl font-bold">StudyHub AI Assistant</h2>
+              <p className="text-sm text-muted-foreground">Ask me anything about your studies</p>
+            </div>
+            <div className="grid w-full max-w-md grid-cols-1 gap-2 sm:grid-cols-2">
+              {SUGGESTIONS.map((s) => (
+                <button key={s} onClick={() => setInput(s)}
+                  className="rounded-xl border border-border px-4 py-3 text-left text-sm text-muted-foreground transition-colors hover:border-accent hover:bg-muted hover:text-foreground">
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {convLoading ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : messages.map((msg, i) => (
+              <div key={msg.id || i} className={cn("flex", msg.role === "user" ? "justify-end" : "justify-start")}>
+                {msg.role === "assistant" && (
+                  <div className="mr-2 mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent/10">
+                    <Bot className="h-3.5 w-3.5 text-accent" />
+                  </div>
+                )}
+                <div className={cn(
+                  "max-w-[80%] rounded-2xl px-4 py-3",
+                  msg.role === "user"
+                    ? "rounded-tr-sm bg-accent text-accent-foreground"
+                    : "rounded-tl-sm border border-border bg-muted/50",
+                )}>
+                  {msg.role === "user" ? (
+                    <p className="whitespace-pre-wrap text-sm">{msg.content}</p>
+                  ) : (
+                    <div className="ai-message-content text-sm [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+                      <ReactMarkdown>{msg.content}</ReactMarkdown>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+            {sending && (
+              <div className="flex justify-start">
+                <div className="mr-2 mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent/10">
+                  <Bot className="h-3.5 w-3.5 text-accent" />
+                </div>
+                <div className="rounded-2xl rounded-tl-sm border border-border bg-muted/50 px-4 py-3">
+                  <span className="flex items-center gap-1 text-sm text-muted-foreground">
+                    AI is thinking
+                    <span className="flex gap-0.5">
+                      <span className="animate-bounce [animation-delay:0ms]">.</span>
+                      <span className="animate-bounce [animation-delay:150ms]">.</span>
+                      <span className="animate-bounce [animation-delay:300ms]">.</span>
+                    </span>
+                  </span>
+                </div>
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+        )}
+
+        {/* Input area */}
+        <div className="shrink-0 border-t border-border p-3">
+          {/* Chips */}
+          {(attachedNoteIds.length > 0 || attachedFileName) && (
+            <div className="mb-2 flex flex-wrap gap-1.5">
+              {attachedNoteIds.map((nid) => {
+                const note = notes.find((n) => n.id === nid);
+                return (
+                  <span key={nid} className="flex items-center gap-1 rounded-full bg-accent/10 px-2 py-0.5 text-xs text-accent">
+                    {note?.title ?? nid}
+                    <button onClick={() => setAttachedNoteIds((prev) => prev.filter((id) => id !== nid))}>
+                      <XIcon className="h-3 w-3" />
+                    </button>
+                  </span>
+                );
+              })}
+              {attachedFileName && (
+                <span className="flex items-center gap-1 rounded-full bg-accent/10 px-2 py-0.5 text-xs text-accent">
+                  📄 {attachedFileName}
+                  <button onClick={() => { setAttachedFileName(null); setAttachedFileContent(null); }}>
+                    <XIcon className="h-3 w-3" />
+                  </button>
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Toolbar */}
+          <div className="mb-2 flex items-center gap-2">
+            <div className="relative">
+              <button
+                onClick={() => setNotePickerOpen((v) => !v)}
+                className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:border-accent hover:text-accent"
+              >
+                <BookOpen className="h-3.5 w-3.5" />Attach Notes
+                {attachedNoteIds.length > 0 && (
+                  <span className="rounded-full bg-accent px-1 text-[10px] font-bold text-accent-foreground">
+                    {attachedNoteIds.length}
+                  </span>
+                )}
+              </button>
+              {notePickerOpen && (
+                <div className="absolute bottom-full left-0 z-10 mb-1 w-56 rounded-xl border border-border bg-card shadow-xl">
+                  <div className="p-2">
+                    <p className="px-2 py-1 text-xs font-medium text-muted-foreground">Select notes to attach</p>
+                    <div className="max-h-48 overflow-y-auto">
+                      {notes.length === 0 ? (
+                        <p className="px-2 py-2 text-xs text-muted-foreground">No notes yet</p>
+                      ) : notes.map((note) => (
+                        <label key={note.id} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-muted">
+                          <input
+                            type="checkbox"
+                            checked={attachedNoteIds.includes(note.id)}
+                            onChange={() => setAttachedNoteIds((prev) =>
+                              prev.includes(note.id) ? prev.filter((id) => id !== note.id) : [...prev, note.id]
+                            )}
+                            className="accent-accent"
+                          />
+                          <span className="truncate text-xs">{note.title}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <button onClick={() => setNotePickerOpen(false)}
+                      className="mt-1 w-full rounded-lg bg-accent py-1.5 text-xs font-medium text-accent-foreground">
+                      Done
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:border-accent hover:text-accent">
+              <Paperclip className="h-3.5 w-3.5" />
+              {extracting ? <><Loader2 className="h-3 w-3 animate-spin" />Extracting…</> : "Attach File"}
+              <input type="file" className="hidden" accept=".txt,.pdf,.png,.jpg,.jpeg" onChange={handleFileUpload} disabled={extracting} />
+            </label>
+          </div>
+
+          {/* Input + send */}
+          <div className="flex items-end gap-2">
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void handleSend(); } }}
+              placeholder="Ask anything about your studies… (Shift+Enter for new line)"
+              rows={2}
+              className="flex-1 resize-none rounded-xl border border-border bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-accent"
+            />
+            <button
+              onClick={() => void handleSend()}
+              disabled={!input.trim() || sending}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
+            >
+              <Send className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Param reader — must be in its own component so Suspense can wrap it
 // ---------------------------------------------------------------------------
 
 function DashboardWithParams() {
   const searchParams = useSearchParams();
   const rawTab = searchParams.get("tab");
-  const initialTab: "notes" | "groups" | "exams" | "planner" =
-    rawTab === "groups" ? "groups" : rawTab === "exams" ? "exams" : rawTab === "planner" ? "planner" : "notes";
+  const initialTab: "notes" | "groups" | "exams" | "planner" | "ai" =
+    rawTab === "groups"  ? "groups"  :
+    rawTab === "exams"   ? "exams"   :
+    rawTab === "planner" ? "planner" :
+    rawTab === "ai"      ? "ai"      :
+    "notes";
   return <DashboardPage initialTab={initialTab} />;
 }
 
