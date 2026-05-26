@@ -285,9 +285,9 @@ function UserDetailSlideOver({ userId, onClose, onUpdated }: {
   return (
     <div className="fixed inset-0 z-50 flex">
       <div className="flex-1 bg-black/50" onClick={onClose} />
-      <div className="w-full max-w-lg overflow-y-auto bg-[#071A18] border-l border-[#1a3330] flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-[#1a3330] px-6 py-4">
+      <div className="flex h-full w-full max-w-lg flex-col border-l border-[#1a3330] bg-[#071A18]">
+        {/* Header — stays pinned */}
+        <div className="shrink-0 flex items-center justify-between border-b border-[#1a3330] px-6 py-4">
           <h2 className="text-base font-semibold text-white">User Detail</h2>
           <button onClick={onClose} className="text-[#6b8f88] hover:text-white transition-colors">
             <X className="h-5 w-5" />
@@ -301,7 +301,7 @@ function UserDetailSlideOver({ userId, onClose, onUpdated }: {
         ) : !detail ? (
           <p className="p-6 text-[#6b8f88]">User not found.</p>
         ) : (
-          <div className="flex-1 space-y-6 p-6">
+          <div className="flex-1 overflow-y-auto space-y-6 p-6" style={{ WebkitOverflowScrolling: "touch" }}>
             {/* Profile header */}
             <div className="flex items-start gap-4">
               <Avatar email={detail.auth?.email ?? ""} plan={detail.profile.subscription_tier as string} size={16} />
@@ -638,15 +638,12 @@ function ManageAdminModal({ user, onClose, onSaved }: {
 
   return (
     <div
-      className="fixed inset-0 z-50 overflow-y-auto bg-black/70 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div
-        className="mx-auto my-8 w-full max-w-lg overflow-y-auto rounded-xl border border-[#1a3330] bg-[#071A18] shadow-2xl"
-        style={{ maxHeight: "90vh" }}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-[#1a3330] px-6 py-4">
+      <div className="relative flex w-full max-w-lg flex-col max-h-[90vh] rounded-xl border border-[#1a3330] bg-[#071A18] shadow-2xl">
+        {/* Header — stays pinned */}
+        <div className="shrink-0 flex items-center justify-between border-b border-[#1a3330] px-6 py-4">
           <div>
             <h2 className="text-base font-semibold text-white">Manage Admin Access</h2>
             <p className="mt-0.5 truncate text-xs text-[#6b8f88]">{user.email}</p>
@@ -657,11 +654,11 @@ function ManageAdminModal({ user, onClose, onSaved }: {
         </div>
 
         {loadingEntry ? (
-          <div className="flex items-center justify-center py-16">
+          <div className="flex flex-1 items-center justify-center py-16">
             <Loader2 className="h-6 w-6 animate-spin text-teal-500" />
           </div>
         ) : (
-          <div className="space-y-6 p-6">
+          <div className="flex-1 overflow-y-auto space-y-6 p-6" style={{ WebkitOverflowScrolling: "touch" }}>
 
             {/* Section A — Admin Status */}
             <div>
@@ -816,9 +813,9 @@ function ManageAdminModal({ user, onClose, onSaved }: {
           </div>
         )}
 
-        {/* Footer */}
+        {/* Footer — stays pinned */}
         {!loadingEntry && (
-          <div className="flex justify-end gap-2 border-t border-[#1a3330] px-6 py-4">
+          <div className="shrink-0 flex justify-end gap-2 border-t border-[#1a3330] px-6 py-4">
             <button
               type="button"
               onClick={onClose}
@@ -1484,14 +1481,17 @@ function AdminsTab({ currentUserId, isSuperAdmin }: { currentUserId: string; isS
       {grantOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60" onClick={() => setGrantOpen(false)} />
-          <div className="relative w-full max-w-md rounded-2xl border border-[#1a3330] bg-[#071A18] p-6 shadow-2xl">
-            <div className="mb-4 flex items-center justify-between">
+          <div className="relative flex w-full max-w-md flex-col max-h-[90vh] rounded-2xl border border-[#1a3330] bg-[#071A18] shadow-2xl">
+            {/* Header — stays pinned */}
+            <div className="shrink-0 flex items-center justify-between border-b border-[#1a3330] px-6 py-4">
               <h3 className="text-base font-semibold text-white">Grant Admin Access</h3>
               <button onClick={() => setGrantOpen(false)} className="text-[#6b8f88] hover:text-white transition-colors">
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <form onSubmit={handleGrant} className="space-y-4">
+            <form onSubmit={handleGrant} className="flex flex-col flex-1 min-h-0">
+              {/* Scrollable fields */}
+              <div className="flex-1 overflow-y-auto space-y-4 px-6 py-4" style={{ WebkitOverflowScrolling: "touch" }}>
               {/* Email lookup */}
               <div>
                 <label className="mb-1.5 block text-xs font-medium text-[#6b8f88]">User Email</label>
@@ -1557,8 +1557,10 @@ function AdminsTab({ currentUserId, isSuperAdmin }: { currentUserId: string; isS
               </div>
 
               {grantError && <p className="rounded-lg bg-red-900/20 border border-red-800/40 px-3 py-2 text-sm text-red-400">{grantError}</p>}
+              </div>{/* end scrollable fields */}
 
-              <div className="flex gap-2 pt-1">
+              {/* Footer — stays pinned */}
+              <div className="shrink-0 flex gap-2 border-t border-[#1a3330] px-6 py-4">
                 <button type="button" onClick={() => setGrantOpen(false)}
                   className="flex-1 rounded-lg border border-[#1a3330] py-2 text-sm text-[#6b8f88] hover:text-white transition-colors">
                   Cancel
@@ -1577,8 +1579,9 @@ function AdminsTab({ currentUserId, isSuperAdmin }: { currentUserId: string; isS
       {editTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60" onClick={() => setEditTarget(null)} />
-          <div className="relative w-full max-w-md rounded-2xl border border-[#1a3330] bg-[#071A18] p-6 shadow-2xl">
-            <div className="mb-4 flex items-center justify-between">
+          <div className="relative flex w-full max-w-md flex-col max-h-[90vh] rounded-2xl border border-[#1a3330] bg-[#071A18] shadow-2xl">
+            {/* Header — stays pinned */}
+            <div className="shrink-0 flex items-center justify-between border-b border-[#1a3330] px-6 py-4">
               <h3 className="text-base font-semibold text-white">Edit — {editTarget.email}</h3>
               <button onClick={() => setEditTarget(null)} className="text-[#6b8f88] hover:text-white transition-colors"><X className="h-5 w-5" /></button>
             </div>
@@ -1610,34 +1613,38 @@ function AdminEditForm({ entry, onSave, onCancel, busy }: {
   }
 
   return (
-    <form onSubmit={submit} className="space-y-4">
-      <div>
-        <label className="mb-1.5 block text-xs font-medium text-[#6b8f88]">Privileges</label>
-        <div className="space-y-1.5">
-          {PRIVILEGE_PRESETS.map(({ key, label, desc }) => (
-            <label key={key} className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-[#1a3330] bg-[#0D2B27] p-2.5 transition-colors hover:border-teal-700/50">
-              <input type="checkbox" checked={!!privs[key]}
-                onChange={(e) => setPrivs((p) => ({ ...p, [key]: e.target.checked }))}
-                className="mt-0.5 accent-teal-500" />
-              <div>
-                <p className="text-xs font-medium text-white">{label}</p>
-                <p className="text-[10px] text-[#6b8f88]">{desc}</p>
-              </div>
-            </label>
-          ))}
+    <form onSubmit={submit} className="flex flex-col flex-1 min-h-0">
+      {/* Scrollable fields */}
+      <div className="flex-1 overflow-y-auto space-y-4 px-6 py-4" style={{ WebkitOverflowScrolling: "touch" }}>
+        <div>
+          <label className="mb-1.5 block text-xs font-medium text-[#6b8f88]">Privileges</label>
+          <div className="space-y-1.5">
+            {PRIVILEGE_PRESETS.map(({ key, label, desc }) => (
+              <label key={key} className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-[#1a3330] bg-[#0D2B27] p-2.5 transition-colors hover:border-teal-700/50">
+                <input type="checkbox" checked={!!privs[key]}
+                  onChange={(e) => setPrivs((p) => ({ ...p, [key]: e.target.checked }))}
+                  className="mt-0.5 accent-teal-500" />
+                <div>
+                  <p className="text-xs font-medium text-white">{label}</p>
+                  <p className="text-[10px] text-[#6b8f88]">{desc}</p>
+                </div>
+              </label>
+            ))}
+          </div>
+        </div>
+        <div>
+          <label className="mb-1.5 block text-xs font-medium text-[#6b8f88]">Expires At</label>
+          <input type="datetime-local" value={expiry} onChange={(e) => setExpiry(e.target.value)}
+            className="w-full rounded-lg border border-[#1a3330] bg-[#0D2B27] px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-teal-600" />
+        </div>
+        <div>
+          <label className="mb-1.5 block text-xs font-medium text-[#6b8f88]">Notes</label>
+          <input value={notes} onChange={(e) => setNotes(e.target.value)}
+            className="w-full rounded-lg border border-[#1a3330] bg-[#0D2B27] px-3 py-2 text-sm text-white placeholder:text-[#6b8f88] focus:outline-none focus:ring-1 focus:ring-teal-600" />
         </div>
       </div>
-      <div>
-        <label className="mb-1.5 block text-xs font-medium text-[#6b8f88]">Expires At</label>
-        <input type="datetime-local" value={expiry} onChange={(e) => setExpiry(e.target.value)}
-          className="w-full rounded-lg border border-[#1a3330] bg-[#0D2B27] px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-teal-600" />
-      </div>
-      <div>
-        <label className="mb-1.5 block text-xs font-medium text-[#6b8f88]">Notes</label>
-        <input value={notes} onChange={(e) => setNotes(e.target.value)}
-          className="w-full rounded-lg border border-[#1a3330] bg-[#0D2B27] px-3 py-2 text-sm text-white placeholder:text-[#6b8f88] focus:outline-none focus:ring-1 focus:ring-teal-600" />
-      </div>
-      <div className="flex gap-2">
+      {/* Footer — stays pinned */}
+      <div className="shrink-0 flex gap-2 border-t border-[#1a3330] px-6 py-4">
         <button type="button" onClick={onCancel}
           className="flex-1 rounded-lg border border-[#1a3330] py-2 text-sm text-[#6b8f88] hover:text-white transition-colors">Cancel</button>
         <button type="submit" disabled={busy}
