@@ -2,13 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { LayoutDashboard, Settings, CreditCard, LogOut, ShieldCheck } from "lucide-react";
+import { LayoutDashboard, Settings, CreditCard, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { createClient } from "@/lib/supabase/browser";
-
-// Hardcoded fallback: always show Admin Console for the primary admin account
-// regardless of DB query results (guards against RLS / migration timing issues).
-const ADMIN_EMAILS = new Set(["kufrekus4@gmail.com"]);
 
 interface Props {
   email: string;
@@ -16,38 +11,10 @@ interface Props {
 }
 
 export function AvatarDropdown({ email, plan }: Props) {
-  const [open, setOpen]           = useState(false);
+  const [open, setOpen]             = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
-  // Seed from the hardcoded set so the link is visible immediately on mount.
-  const [isAdmin, setIsAdmin]     = useState(() => ADMIN_EMAILS.has(email));
-  const containerRef              = useRef<HTMLDivElement>(null);
-  const initial                   = email.charAt(0).toUpperCase();
-
-  useEffect(() => {
-    // Primary check: API route uses the service-role key, bypasses RLS.
-    fetch("/api/admin/check")
-      .then((r) => r.json())
-      .then((j) => { if (j.data?.isAdmin === true) setIsAdmin(true); })
-      .catch(() => {});
-
-    // Secondary check: direct browser-client query as a belt-and-suspenders.
-    // Only ever sets isAdmin to true — never overrides the hardcoded fallback.
-    async function checkViaSupabase() {
-      try {
-        const supabase = createClient();
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data } = await (supabase as any)
-          .from("users")
-          .select("is_admin")
-          .eq("id", user.id)
-          .maybeSingle();
-        if ((data as { is_admin: boolean } | null)?.is_admin === true) setIsAdmin(true);
-      } catch { /* non-critical */ }
-    }
-    void checkViaSupabase();
-  }, []);
+  const containerRef                = useRef<HTMLDivElement>(null);
+  const initial                     = email.charAt(0).toUpperCase();
 
   useEffect(() => {
     function handler(e: MouseEvent) {
@@ -121,22 +88,6 @@ export function AvatarDropdown({ email, plan }: Props) {
               </Link>
             ))}
           </div>
-
-          {isAdmin && (
-            <>
-              <div className="border-t border-border/60" />
-              <div className="p-1">
-                <Link
-                  href="/admin"
-                  onClick={() => setOpen(false)}
-                  className="flex items-center gap-2.5 rounded-lg border-l-2 border-l-teal-500/70 pl-2.5 pr-3 py-2 text-sm font-medium text-teal-600 dark:text-teal-400 transition-colors hover:bg-teal-500/8"
-                >
-                  <ShieldCheck className="h-4 w-4 shrink-0" />
-                  Admin Console
-                </Link>
-              </div>
-            </>
-          )}
 
           <div className="border-t border-border/60" />
 
