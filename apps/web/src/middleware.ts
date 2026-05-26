@@ -41,6 +41,30 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  // For /admin routes, verify the user is still an active admin.
+  if (user && pathname.startsWith("/admin")) {
+    try {
+      const { data: userRow } = await supabase
+        .from("users")
+        .select("is_admin, admin_expires_at")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      const isExpired = userRow?.admin_expires_at
+        ? new Date(userRow.admin_expires_at as string) < new Date()
+        : false;
+
+      if (!userRow?.is_admin || isExpired) {
+        const dashboardUrl = request.nextUrl.clone();
+        dashboardUrl.pathname = "/dashboard";
+        return NextResponse.redirect(dashboardUrl);
+      }
+    } catch {
+      // If the column doesn't exist yet (migration pending), fall through —
+      // the API-level requireAdmin check will still enforce access.
+    }
+  }
+
   return supabaseResponse;
 }
 

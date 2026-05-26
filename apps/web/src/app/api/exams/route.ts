@@ -7,6 +7,8 @@ import { checkLimit, incrementUsage } from "@/lib/usage";
 import { recordStudyActivity } from "@/lib/streaks";
 import type { ExamUploadRow } from "@studyhub/database";
 
+export const maxDuration = 60;
+
 const SUPPORTED_EXTENSIONS = new Set([".txt", ".pdf", ".png", ".jpg", ".jpeg"]);
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
@@ -83,10 +85,13 @@ export async function POST(request: Request) {
   const { user, authErr } = await requireUser(supabase);
   if (authErr) return authErr;
 
+  console.log("[exams] POST start — user:", user.id);
+
   let formData: FormData;
   try {
     formData = await request.formData();
-  } catch {
+  } catch (e) {
+    console.error("[exams] formData parse failed:", e);
     return err("Invalid form data", 400);
   }
 
@@ -97,10 +102,13 @@ export async function POST(request: Request) {
     return err("title is required", 400);
   }
   if (!(file instanceof File)) {
+    console.error("[exams] No file in formData — keys:", [...formData.keys()]);
     return err("file is required", 400);
   }
 
   const ext = fileExtension(file.name);
+  console.log("[exams] File:", file.name, "size:", file.size, "ext:", ext);
+
   if (!SUPPORTED_EXTENSIONS.has(ext)) {
     return err("Unsupported file type. Allowed: .txt, .pdf, .png, .jpg, .jpeg", 400);
   }
@@ -108,30 +116,41 @@ export async function POST(request: Request) {
     return err("File exceeds 10 MB limit", 400);
   }
 
-  let content: string;
-  try {
-    content = await extractText(file);
-  } catch (e) {
-    console.error("[exams] Text extraction failed:", e);
-    return err("Failed to extract text from file", 422);
-  }
-
-  if (!content || content.trim().length === 0) {
-    return err("Could not extract text from file", 400);
-  }
-
   const limitCheck = await checkLimit(user.id, "exam_predictions", supabase);
+  console.log("[exams] Limit check:", limitCheck);
   if (!limitCheck.allowed) {
     return err("Upgrade to Pro to unlock exam predictions.", 403);
   }
 
+  console.log("[exams] Starting text extraction for ext:", ext);
+  const t0 = Date.now();
+  let content: string;
+  try {
+    content = await extractText(file);
+    console.log("[exams] Text extraction OK — chars:", content.length, "ms:", Date.now() - t0);
+  } catch (e) {
+    console.error("[exams] Text extraction failed after", Date.now() - t0, "ms:", e);
+    return err("Failed to extract text from file", 422);
+  }
+
+  if (!content || content.trim().length === 0) {
+    console.warn("[exams] Extraction produced empty content");
+    return err("Could not extract text from file", 400);
+  }
+
+  console.log("[exams] Inserting exam to DB");
   const { data: exam, error } = await supabase
     .from("exam_uploads")
     .insert({ user_id: user.id, title: title.trim(), status: "pending", content })
     .select()
     .single();
 
-  if (error) return err(error.message, 500);
+  if (error) {
+    console.error("[exams] DB insert failed:", error);
+    return err(error.message, 500);
+  }
+
+  console.log("[exams] Exam created:", exam.id);
 
   void incrementUsage(user.id, "exam_predictions", supabase);
   await tryDel(cacheKeys.examsList(user.id));

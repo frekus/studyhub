@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useRef, useState } from "react";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -534,7 +535,7 @@ function StreakWidget({ streak }: { streak: StreakData }) {
 
   const isPulsing = streak.current_streak >= 7 && streak.current_streak < 30;
 
-  const last14 = streak.activity.slice(-14);
+  const last14 = (streak.activity ?? []).slice(-14);
 
   return (
     <div className="mb-4 rounded-xl border border-border bg-card p-3 sm:p-4">
@@ -1124,10 +1125,16 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
   }
 
   function startFlashcardsPolling(noteId: string) {
+    // Don't start a duplicate if one is already running for this note
+    if (pollIntervalsRef.current.has(`fc_${noteId}`)) return;
     let elapsed = 0;
     const interval = setInterval(async () => {
       elapsed += 3000;
-      if (elapsed > 60000) { clearInterval(interval); return; }
+      if (elapsed > 60000) {
+        clearInterval(interval);
+        pollIntervalsRef.current.delete(`fc_${noteId}`);
+        return;
+      }
       try {
         const res = await fetch(`/api/notes/${noteId}/flashcards`);
         if (!res.ok) return;
@@ -1136,9 +1143,11 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
         if (Array.isArray(cards) && cards.length > 0) {
           setFlashcardsMap((prev) => ({ ...prev, [noteId]: cards }));
           clearInterval(interval);
+          pollIntervalsRef.current.delete(`fc_${noteId}`);
         }
       } catch { /* ignore */ }
     }, 3000);
+    pollIntervalsRef.current.set(`fc_${noteId}`, interval);
   }
 
   function startSummaryPolling(noteId: string) {
@@ -1364,14 +1373,19 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
     if (!examFile) { setExamError("Please select a file"); return; }
     setExamError("");
     setExamUploading(true);
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 60000);
+
     try {
       const formData = new FormData();
       formData.append("title", examTitle);
       formData.append("file", examFile);
-      const res = await fetch("/api/exams", { method: "POST", body: formData });
+      const res = await fetch("/api/exams", { method: "POST", body: formData, signal: controller.signal });
+      clearTimeout(timer);
       const json = await res.json() as { data?: { exam: Exam }; error?: string };
       if (res.status === 403) { showUpgradeModal(json.error ?? "Upgrade to unlock exam predictions."); return; }
-      if (!res.ok) { setExamError(json.error ?? "Upload failed"); return; }
+      if (!res.ok) { setExamError(json.error ?? "Upload failed. Please try again."); return; }
       const newExam = json.data!.exam;
       setExams((prev) => [newExam, ...prev]);
       setExamTitle("");
@@ -1379,8 +1393,14 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
       setExamFile(null);
       setExamImagePreview(null);
       startExamPolling(newExam.id);
-    } catch { setExamError("Network error. Please try again."); }
-    finally { setExamUploading(false); }
+    } catch (error) {
+      clearTimeout(timer);
+      console.error("[exam-upload] Error:", error);
+      const isAbort = error instanceof Error && error.name === "AbortError";
+      setExamError(isAbort ? "Upload timed out. Please try again." : "Network error. Please try again.");
+    } finally {
+      setExamUploading(false);
+    }
   }
 
   function handleExamDeleted(id: string) { setExams((prev) => prev.filter((e) => e.id !== id)); }
@@ -2044,14 +2064,16 @@ function DashboardWithParams() {
 
 export default function Page() {
   return (
-    <Suspense
-      fallback={
-        <div className="flex min-h-screen items-center justify-center bg-background">
-          <p className="text-muted-foreground">Loading…</p>
-        </div>
-      }
-    >
-      <DashboardWithParams />
-    </Suspense>
+    <ErrorBoundary>
+      <Suspense
+        fallback={
+          <div className="flex min-h-screen items-center justify-center bg-background">
+            <p className="text-muted-foreground">Loading…</p>
+          </div>
+        }
+      >
+        <DashboardWithParams />
+      </Suspense>
+    </ErrorBoundary>
   );
 }

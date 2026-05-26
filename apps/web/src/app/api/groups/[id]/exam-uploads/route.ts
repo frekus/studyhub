@@ -3,6 +3,8 @@ import { createClient, requireUser } from "@/lib/supabase/server";
 import { createAdminClient } from "@studyhub/database";
 import { ok, err } from "@/lib/response";
 
+export const maxDuration = 60;
+
 type Params = Promise<{ id: string }>;
 
 const SUPPORTED = new Set([".txt", ".pdf", ".png", ".jpg", ".jpeg"]);
@@ -59,15 +61,27 @@ export async function POST(request: Request, { params }: { params: Params }) {
   if (!SUPPORTED.has(ext(file.name))) return err("Unsupported file type", 400);
   if (file.size > MAX_SIZE) return err("File exceeds 10 MB limit", 400);
 
+  console.log("[group-exams] Starting text extraction for:", file.name, "size:", file.size);
+  const t0 = Date.now();
   let content: string;
-  try { content = await extractText(file); } catch { return err("Failed to extract text", 422); }
+  try {
+    content = await extractText(file);
+    console.log("[group-exams] Extraction OK — chars:", content.length, "ms:", Date.now() - t0);
+  } catch (e) {
+    console.error("[group-exams] Extraction failed after", Date.now() - t0, "ms:", e);
+    return err("Failed to extract text", 422);
+  }
   if (!content.trim()) return err("Could not extract text from file", 400);
 
+  console.log("[group-exams] Inserting to DB");
   const { data: upload, error } = await admin
     .from("group_exam_uploads")
     .insert({ group_id: id, uploaded_by: user.id, title: title.trim(), content })
     .select().single();
-  if (error) return err(error.message, 500);
+  if (error) {
+    console.error("[group-exams] DB insert failed:", error);
+    return err(error.message, 500);
+  }
 
   return ok({ upload }, 201);
 }

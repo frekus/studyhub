@@ -125,7 +125,7 @@ function Tooltip({ label, direction = "above", children }: {
     right: "left-full top-1/2 -translate-y-1/2 ml-2",
   };
   return (
-    <div className="group/tooltip relative inline-flex">
+    <div className="group/tooltip relative flex w-full">
       {children}
       <span className={cn(
         "pointer-events-none absolute z-50 whitespace-nowrap rounded-md border border-[#1a3330] bg-[#0D2B27] px-2 py-1 text-xs text-white shadow-lg",
@@ -537,6 +537,311 @@ function MenuItem({ onClick, children, className }: { onClick: () => void; child
 }
 
 // ---------------------------------------------------------------------------
+// ManageAdminModal
+// ---------------------------------------------------------------------------
+
+const PRIVILEGE_LABELS = [
+  { key: "manage_users",        label: "Manage Users" },
+  { key: "view_subscriptions",  label: "View Subscriptions" },
+  { key: "manage_content",      label: "Manage Content" },
+  { key: "view_analytics",      label: "View Analytics" },
+  { key: "manage_study_groups", label: "Manage Study Groups" },
+];
+
+const ROLE_OPTIONS = [
+  { value: "admin",         label: "Admin" },
+  { value: "super_admin",   label: "Super Admin" },
+  { value: "moderator",     label: "Moderator" },
+  { value: "support_agent", label: "Support Agent" },
+];
+
+function ManageAdminModal({ user, onClose, onSaved }: {
+  user: AdminUser;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [loadingEntry, setLoadingEntry] = useState(true);
+  const [currentEntry, setCurrentEntry] = useState<AdminEntry | null>(null);
+  const [adminEnabled, setAdminEnabled] = useState(false);
+  const [role, setRole] = useState("admin");
+  const [privs, setPrivs] = useState<Record<string, boolean>>({
+    manage_users: false, view_subscriptions: false, manage_content: false,
+    view_analytics: false, manage_study_groups: false,
+  });
+  const [durationType, setDurationType] = useState<"unlimited" | "fixed">("unlimited");
+  const [expiryDate, setExpiryDate] = useState("");
+  const [confirmRevoke, setConfirmRevoke] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    fetch("/api/admin/admins")
+      .then((r) => r.json())
+      .then((j) => {
+        const entry: AdminEntry | undefined = (j.data?.admins ?? []).find((a: AdminEntry) => a.user_id === user.id);
+        setCurrentEntry(entry ?? null);
+        if (entry) {
+          setAdminEnabled(true);
+          setRole(entry.role);
+          setPrivs({
+            manage_users:        !!entry.privileges?.manage_users,
+            view_subscriptions:  !!entry.privileges?.view_subscriptions,
+            manage_content:      !!entry.privileges?.manage_content,
+            view_analytics:      !!entry.privileges?.view_analytics,
+            manage_study_groups: !!entry.privileges?.manage_study_groups,
+          });
+          if (entry.expires_at) {
+            setDurationType("fixed");
+            setExpiryDate(entry.expires_at.slice(0, 10));
+          }
+        }
+      })
+      .finally(() => setLoadingEntry(false));
+  }, [user.id]);
+
+  async function handleSave() {
+    setSaving(true); setError("");
+    try {
+      const res = await fetch(`/api/admin/users/${user.id}/role`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          is_admin: adminEnabled,
+          ...(adminEnabled && { role, privileges: privs }),
+          expires_at: adminEnabled && durationType === "fixed" && expiryDate
+            ? new Date(expiryDate + "T23:59:59Z").toISOString()
+            : null,
+        }),
+      });
+      const j = await res.json();
+      if (!res.ok) { setError(j.error ?? "Save failed"); return; }
+      onSaved(); onClose();
+    } catch { setError("Network error. Please try again."); }
+    finally { setSaving(false); }
+  }
+
+  async function handleRevoke() {
+    setSaving(true); setError("");
+    try {
+      const res = await fetch(`/api/admin/users/${user.id}/role`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_admin: false }),
+      });
+      if (!res.ok) { const j = await res.json(); setError(j.error ?? "Failed"); return; }
+      onSaved(); onClose();
+    } catch { setError("Network error"); }
+    finally { setSaving(false); }
+  }
+
+  const isExpired = currentEntry?.expires_at ? new Date(currentEntry.expires_at) < new Date() : false;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 overflow-y-auto bg-black/70 backdrop-blur-sm"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        className="mx-auto my-8 w-full max-w-lg overflow-y-auto rounded-xl border border-[#1a3330] bg-[#071A18] shadow-2xl"
+        style={{ maxHeight: "90vh" }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-[#1a3330] px-6 py-4">
+          <div>
+            <h2 className="text-base font-semibold text-white">Manage Admin Access</h2>
+            <p className="mt-0.5 truncate text-xs text-[#6b8f88]">{user.email}</p>
+          </div>
+          <button onClick={onClose} className="text-[#6b8f88] transition-colors hover:text-white">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {loadingEntry ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="h-6 w-6 animate-spin text-teal-500" />
+          </div>
+        ) : (
+          <div className="space-y-6 p-6">
+
+            {/* Section A — Admin Status */}
+            <div>
+              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#6b8f88]">Admin Status</h3>
+              <div className="flex items-center justify-between rounded-lg border border-[#1a3330] bg-[#0D2B27] px-4 py-3">
+                <span className="text-sm text-white">Grant Admin Access</span>
+                <button
+                  type="button"
+                  onClick={() => setAdminEnabled((v) => !v)}
+                  className={cn("relative h-5 w-9 rounded-full transition-colors", adminEnabled ? "bg-teal-500" : "bg-[#1a3330]")}
+                >
+                  <span className={cn(
+                    "absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform",
+                    adminEnabled ? "translate-x-[18px]" : "translate-x-0.5",
+                  )} />
+                </button>
+              </div>
+
+              {adminEnabled && (
+                <div className="mt-3">
+                  <label className="mb-1 block text-xs text-[#6b8f88]">Admin Role</label>
+                  <select
+                    value={role}
+                    onChange={(e) => setRole(e.target.value)}
+                    className="h-9 w-full rounded-lg border border-[#1a3330] bg-[#0D2B27] px-3 text-sm text-white focus:outline-none focus:ring-1 focus:ring-teal-600"
+                  >
+                    {ROLE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {/* Section B — Privileges */}
+            {adminEnabled && (
+              <div>
+                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#6b8f88]">Privileges</h3>
+                <div className="space-y-2.5 rounded-lg border border-[#1a3330] bg-[#0D2B27] p-4">
+                  {PRIVILEGE_LABELS.map(({ key, label }) => (
+                    <label key={key} className="flex cursor-pointer items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={!!privs[key]}
+                        onChange={(e) => setPrivs((p) => ({ ...p, [key]: e.target.checked }))}
+                        className="accent-teal-500"
+                      />
+                      <span className="text-sm text-white">{label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Section C — Duration */}
+            {adminEnabled && (
+              <div>
+                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#6b8f88]">Duration</h3>
+                <div className="space-y-2.5 rounded-lg border border-[#1a3330] bg-[#0D2B27] p-4">
+                  <label className="flex cursor-pointer items-center gap-3">
+                    <input type="radio" name="admin-duration" value="unlimited" checked={durationType === "unlimited"} onChange={() => setDurationType("unlimited")} className="accent-teal-500" />
+                    <span className="text-sm text-white">Unlimited</span>
+                  </label>
+                  <label className="flex cursor-pointer items-center gap-3">
+                    <input type="radio" name="admin-duration" value="fixed" checked={durationType === "fixed"} onChange={() => setDurationType("fixed")} className="accent-teal-500" />
+                    <span className="text-sm text-white">Fixed Duration</span>
+                  </label>
+                  {durationType === "fixed" && (
+                    <div className="mt-2 pl-6">
+                      <label className="mb-1 block text-xs text-[#6b8f88]">Expires on</label>
+                      <input
+                        type="date"
+                        value={expiryDate}
+                        min={new Date().toISOString().slice(0, 10)}
+                        onChange={(e) => setExpiryDate(e.target.value)}
+                        className="h-9 w-full rounded-lg border border-[#1a3330] bg-[#071A18] px-3 text-sm text-white focus:outline-none focus:ring-1 focus:ring-teal-600"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Section D — Current Admin Info */}
+            {currentEntry && (
+              <div>
+                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#6b8f88]">Current Admin Info</h3>
+                <div className="space-y-2 rounded-lg border border-[#1a3330] bg-[#0D2B27] p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-[#6b8f88]">Role</span>
+                    <span className="rounded-full bg-teal-900/40 px-2 py-0.5 text-xs font-medium capitalize text-teal-300">
+                      {currentEntry.role.replace(/_/g, " ")}
+                    </span>
+                    {isExpired && (
+                      <span className="rounded-full bg-red-900/40 px-2 py-0.5 text-xs font-medium text-red-400">Expired</span>
+                    )}
+                  </div>
+                  {currentEntry.privileges && Object.values(currentEntry.privileges).some(Boolean) && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {Object.entries(currentEntry.privileges)
+                        .filter(([, v]) => v)
+                        .map(([k]) => (
+                          <span key={k} className="rounded-full bg-[#1a3330] px-2 py-0.5 text-[10px] capitalize text-[#6b8f88]">
+                            {k.replace(/_/g, " ")}
+                          </span>
+                        ))}
+                    </div>
+                  )}
+                  {currentEntry.expires_at && (
+                    <p className="text-xs text-[#6b8f88]">Expires: {fmtDate(currentEntry.expires_at)}</p>
+                  )}
+                  {currentEntry.granted_by_email && (
+                    <p className="text-xs text-[#6b8f88]">Granted by: {currentEntry.granted_by_email}</p>
+                  )}
+                </div>
+
+                {!confirmRevoke ? (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmRevoke(true)}
+                    className="mt-3 flex items-center gap-2 rounded-lg border border-red-800/50 px-4 py-2 text-sm text-red-400 transition-colors hover:bg-red-900/20"
+                  >
+                    <ShieldOff className="h-4 w-4" />
+                    Revoke Admin Access
+                  </button>
+                ) : (
+                  <div className="mt-3 rounded-lg border border-red-800/50 bg-red-900/10 p-3">
+                    <p className="mb-2 text-sm text-red-400">Remove all admin access for this user?</p>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={handleRevoke}
+                        disabled={saving}
+                        className="rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+                      >
+                        {saving ? "Revoking…" : "Yes, Revoke"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmRevoke(false)}
+                        className="rounded-md border border-[#1a3330] px-3 py-1.5 text-xs text-[#6b8f88] transition-colors hover:bg-[#1a3330] hover:text-white"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {error && (
+              <div className="rounded-lg border border-red-800/50 bg-red-900/10 px-3 py-2 text-sm text-red-400">{error}</div>
+            )}
+          </div>
+        )}
+
+        {/* Footer */}
+        {!loadingEntry && (
+          <div className="flex justify-end gap-2 border-t border-[#1a3330] px-6 py-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg border border-[#1a3330] px-4 py-2 text-sm text-[#6b8f88] transition-colors hover:bg-[#1a3330] hover:text-white"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving}
+              className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-teal-500 disabled:opacity-50"
+            >
+              {saving ? "Saving…" : "Save"}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Dashboard Tab
 // ---------------------------------------------------------------------------
 
@@ -638,7 +943,7 @@ function DashboardTab({ stats, onRefresh, signups, recentNotes, recentExams }: {
 // Users Tab
 // ---------------------------------------------------------------------------
 
-function UsersTab({ onViewUser }: { onViewUser: (id: string) => void }) {
+function UsersTab({ onViewUser, onManage }: { onViewUser: (id: string) => void; onManage: (user: AdminUser) => void }) {
   const [users, setUsers]       = useState<AdminUser[]>([]);
   const [total, setTotal]       = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -781,7 +1086,7 @@ function UsersTab({ onViewUser }: { onViewUser: (id: string) => void }) {
                   <th className="px-4 py-3 text-left text-xs font-medium text-[#6b8f88] uppercase tracking-wide hidden sm:table-cell">Status</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-[#6b8f88] uppercase tracking-wide hidden lg:table-cell">Notes</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-[#6b8f88] uppercase tracking-wide hidden lg:table-cell">Joined</th>
-                  <th className="px-4 py-3" />
+                  <th className="px-4 py-3 text-left text-xs font-medium text-[#6b8f88] uppercase tracking-wide">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -802,7 +1107,15 @@ function UsersTab({ onViewUser }: { onViewUser: (id: string) => void }) {
                     <td className="px-4 py-3 text-[#6b8f88] hidden lg:table-cell">{u.notes_count}</td>
                     <td className="px-4 py-3 text-[#6b8f88] hidden lg:table-cell">{fmtDate(u.created_at)}</td>
                     <td className="px-4 py-3">
-                      <UserRowMenu user={u} onRefresh={() => fetchUsers()} onView={() => onViewUser(u.id)} />
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => onManage(u)}
+                          className="rounded-md border border-[#1a3330] px-2.5 py-1 text-xs font-medium text-teal-400 transition-colors hover:bg-teal-900/20 hover:text-teal-300 whitespace-nowrap"
+                        >
+                          Manage
+                        </button>
+                        <UserRowMenu user={u} onRefresh={() => fetchUsers()} onView={() => onViewUser(u.id)} />
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -1377,6 +1690,7 @@ export default function AdminPage() {
   const [activity, setActivity]     = useState<{ signups: ActivityItem[]; notes: ActivityItem[]; exams: ActivityItem[] } | null>(null);
   const [activeTab, setActiveTab]   = useState<NavTab>("dashboard");
   const [detailUserId, setDetailUserId] = useState<string | null>(null);
+  const [manageUser, setManageUser]     = useState<AdminUser | null>(null);
   const [sidebarOpen, setSidebarOpen]   = useState(false);
   const [usersKey, setUsersKey]     = useState(0);
 
@@ -1505,7 +1819,7 @@ export default function AdminPage() {
             />
           )}
           {activeTab === "users" && (
-            <UsersTab key={usersKey} onViewUser={setDetailUserId} />
+            <UsersTab key={usersKey} onViewUser={setDetailUserId} onManage={setManageUser} />
           )}
           {activeTab === "subscriptions" && stats && (
             <SubscriptionsTab stats={stats} />
@@ -1522,6 +1836,13 @@ export default function AdminPage() {
           userId={detailUserId}
           onClose={() => setDetailUserId(null)}
           onUpdated={() => setUsersKey((k) => k + 1)}
+        />
+      )}
+      {manageUser && (
+        <ManageAdminModal
+          user={manageUser}
+          onClose={() => setManageUser(null)}
+          onSaved={() => setUsersKey((k) => k + 1)}
         />
       )}
     </div>
