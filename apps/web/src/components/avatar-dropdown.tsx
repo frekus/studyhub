@@ -4,6 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { LayoutDashboard, Settings, CreditCard, LogOut, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { createClient } from "@/lib/supabase/browser";
+
+// Hardcoded fallback: always show Admin Console for the primary admin account
+// regardless of DB query results (guards against RLS / migration timing issues).
+const ADMIN_EMAILS = new Set(["kufrekus4@gmail.com"]);
 
 interface Props {
   email: string;
@@ -13,15 +18,35 @@ interface Props {
 export function AvatarDropdown({ email, plan }: Props) {
   const [open, setOpen]           = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
-  const [isAdmin, setIsAdmin]     = useState(false);
+  // Seed from the hardcoded set so the link is visible immediately on mount.
+  const [isAdmin, setIsAdmin]     = useState(() => ADMIN_EMAILS.has(email));
   const containerRef              = useRef<HTMLDivElement>(null);
   const initial                   = email.charAt(0).toUpperCase();
 
   useEffect(() => {
+    // Primary check: API route uses the service-role key, bypasses RLS.
     fetch("/api/admin/check")
       .then((r) => r.json())
-      .then((j) => setIsAdmin(j.data?.isAdmin === true))
+      .then((j) => { if (j.data?.isAdmin === true) setIsAdmin(true); })
       .catch(() => {});
+
+    // Secondary check: direct browser-client query as a belt-and-suspenders.
+    // Only ever sets isAdmin to true — never overrides the hardcoded fallback.
+    async function checkViaSupabase() {
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data } = await (supabase as any)
+          .from("users")
+          .select("is_admin")
+          .eq("id", user.id)
+          .maybeSingle();
+        if ((data as { is_admin: boolean } | null)?.is_admin === true) setIsAdmin(true);
+      } catch { /* non-critical */ }
+    }
+    void checkViaSupabase();
   }, []);
 
   useEffect(() => {
