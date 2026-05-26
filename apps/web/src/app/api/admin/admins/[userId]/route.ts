@@ -7,10 +7,9 @@ import { z } from "zod";
 type Params = Promise<{ userId: string }>;
 
 const UpdateSchema = z.object({
-  role: z.enum(["admin", "super_admin"]).optional(),
+  role:       z.enum(["admin", "super_admin", "moderator", "support_agent"]).optional(),
   privileges: z.record(z.string(), z.boolean()).optional().nullable(),
   expires_at: z.string().optional().nullable(),
-  notes: z.string().max(500).optional().nullable(),
 });
 
 export async function PATCH(request: Request, { params }: { params: Params }) {
@@ -35,11 +34,16 @@ export async function PATCH(request: Request, { params }: { params: Params }) {
   const parsed = UpdateSchema.safeParse(body);
   if (!parsed.success) return err(parsed.error.issues[0]?.message ?? "Invalid body", 400);
 
+  const update: Record<string, unknown> = {};
+  if (parsed.data.role !== undefined)       update.admin_role       = parsed.data.role;
+  if (parsed.data.privileges !== undefined) update.admin_privileges = parsed.data.privileges;
+  if (parsed.data.expires_at !== undefined) update.admin_expires_at = parsed.data.expires_at;
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (admin as any)
-    .from("admin_users")
-    .update(parsed.data)
-    .eq("user_id", targetUserId);
+    .from("users")
+    .update(update)
+    .eq("id", targetUserId);
 
   if (error) return err(error.message, 500);
 
@@ -71,20 +75,21 @@ export async function DELETE(_request: Request, { params }: { params: Params }) 
   // Prevent removing another super_admin
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: target } = await (admin as any)
-    .from("admin_users")
-    .select("role")
-    .eq("user_id", targetUserId)
+    .from("users")
+    .select("admin_role")
+    .eq("id", targetUserId)
     .maybeSingle();
 
-  if ((target as { role: string } | null)?.role === "super_admin") {
+  if ((target as { admin_role: string } | null)?.admin_role === "super_admin") {
     return err("Cannot revoke super admin access", 403);
   }
 
+  // Clear all admin columns — keep the row, just revoke access
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (admin as any)
-    .from("admin_users")
-    .delete()
-    .eq("user_id", targetUserId);
+    .from("users")
+    .update({ is_admin: false, admin_role: null, admin_privileges: null, admin_expires_at: null })
+    .eq("id", targetUserId);
 
   if (error) return err(error.message, 500);
 

@@ -7,8 +7,8 @@ import { z } from "zod";
 type Params = Promise<{ id: string }>;
 
 const RoleSchema = z.object({
-  is_admin: z.boolean(),
-  role: z.enum(["admin", "super_admin", "moderator", "support_agent"]).optional(),
+  is_admin:   z.boolean(),
+  role:       z.enum(["admin", "super_admin", "moderator", "support_agent"]).optional(),
   privileges: z.record(z.string(), z.boolean()).optional().nullable(),
   expires_at: z.string().optional().nullable(),
 });
@@ -41,43 +41,27 @@ export async function PATCH(request: Request, { params }: { params: Params }) {
 
   const { is_admin, role, privileges, expires_at } = parsed.data;
 
-  if (is_admin) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: upsertErr } = await (admin as any)
-      .from("admin_users")
-      .upsert(
-        {
-          user_id: targetId,
-          role: role ?? "admin",
-          privileges: privileges ?? null,
-          expires_at: expires_at ?? null,
-          granted_by: user.id,
-        },
-        { onConflict: "user_id" },
-      );
-    if (upsertErr) return err(upsertErr.message, 500);
+  const update = is_admin
+    ? {
+        is_admin:         true,
+        admin_role:       role ?? "admin",
+        admin_privileges: privileges ?? null,
+        admin_expires_at: expires_at ?? null,
+      }
+    : {
+        is_admin:         false,
+        admin_role:       null,
+        admin_privileges: null,
+        admin_expires_at: null,
+      };
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: userErr } = await (admin as any)
-      .from("users")
-      .update({ is_admin: true, admin_expires_at: expires_at ?? null })
-      .eq("id", targetId);
-    if (userErr) return err(userErr.message, 500);
-  } else {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: delErr } = await (admin as any)
-      .from("admin_users")
-      .delete()
-      .eq("user_id", targetId);
-    if (delErr) return err(delErr.message, 500);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (admin as any)
+    .from("users")
+    .update(update)
+    .eq("id", targetId);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: userErr } = await (admin as any)
-      .from("users")
-      .update({ is_admin: false, admin_expires_at: null })
-      .eq("id", targetId);
-    if (userErr) return err(userErr.message, 500);
-  }
+  if (error) return err(error.message, 500);
 
   return ok({ message: is_admin ? "Admin access granted" : "Admin access revoked" });
 }
