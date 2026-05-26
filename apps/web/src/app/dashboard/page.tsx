@@ -25,6 +25,7 @@ import {
   Upload, CheckCircle2, XCircle, ChevronRight, HelpCircle, Zap,
   Folder, FolderOpen, Brain, Target, Star, FolderInput,
   Pencil, Check, X as XIcon, Bell,
+  Calendar, Clock, RotateCcw, History, ThumbsDown, ThumbsUp,
 } from "lucide-react";
 import { AvatarDropdown } from "@/components/avatar-dropdown";
 import { cn } from "@/lib/utils";
@@ -91,6 +92,57 @@ interface Group {
   created_at: string;
   member_count: number;
   role: string;
+}
+
+interface StudyPlan {
+  id: string;
+  title: string;
+  subject: string;
+  exam_date: string;
+  status: "generating" | "ready" | "failed";
+  note_ids: string[];
+  created_at: string;
+  progress: { total: number; completed: number };
+}
+
+interface StudyPlanDay {
+  id: string;
+  plan_id: string;
+  study_date: string;
+  day_number: number;
+  title: string;
+  description: string;
+  note_ids: string[];
+  is_completed: boolean;
+  is_today: boolean;
+  is_past: boolean;
+}
+
+interface WeakArea {
+  flashcard_id: string;
+  note_id: string;
+  question: string;
+  answer: string;
+  note_title: string;
+  incorrect_count: number;
+  correct_count: number;
+  accuracy_pct: number;
+}
+
+interface DueCard {
+  flashcard_id: string;
+  note_id: string;
+  question: string;
+  answer: string;
+  note_title: string;
+}
+
+interface NoteVersion {
+  id: string;
+  version_number: number;
+  title: string;
+  created_at: string;
+  content_preview: string | null;
 }
 
 interface User {
@@ -626,7 +678,7 @@ function UpgradeModal({ open, message, onClose }: { open: boolean; message: stri
 // NoteCard
 // ---------------------------------------------------------------------------
 
-function NoteCard({ note, flashcardCount, folder, folders, onDelete, onStudy, onMove }: {
+function NoteCard({ note, flashcardCount, folder, folders, onDelete, onStudy, onMove, onHistory }: {
   note: Note;
   flashcardCount: number | undefined;
   folder?: Folder;
@@ -634,6 +686,7 @@ function NoteCard({ note, flashcardCount, folder, folders, onDelete, onStudy, on
   onDelete: (id: string) => void;
   onStudy: (noteId: string, noteTitle: string) => void;
   onMove: (note: Note) => void;
+  onHistory: (note: Note) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -676,6 +729,15 @@ function NoteCard({ note, flashcardCount, folder, folders, onDelete, onStudy, on
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          <Tooltip label="Version history">
+            <button
+              onClick={() => onHistory(note)}
+              className="rounded p-1 text-muted-foreground opacity-0 transition-opacity duration-200 group-hover:opacity-100 hover:text-foreground"
+              aria-label="Version history"
+            >
+              <History className="h-4 w-4" />
+            </button>
+          </Tooltip>
           <Tooltip label="Move to folder">
             <button
               onClick={() => onMove(note)}
@@ -1041,7 +1103,7 @@ function ExamCard({ exam, onDelete }: { exam: Exam; onDelete: (id: string) => vo
 // DashboardPage
 // ---------------------------------------------------------------------------
 
-function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams" }) {
+function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams" | "planner" }) {
   const router       = useRouter();
   const [user, setUser]           = useState<User | null>(null);
   const [notes, setNotes]         = useState<Note[]>([]);
@@ -1051,7 +1113,7 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
   const [uncategorizedCount, setUncategorizedCount] = useState(0);
   const [selectedFolderId, setSelectedFolderId]     = useState<string | null>(null);
   const [moveNoteTarget, setMoveNoteTarget]         = useState<Note | null>(null);
-  const [tab, setTab]             = useState<"notes" | "groups" | "exams">(initialTab);
+  const [tab, setTab]             = useState<"notes" | "groups" | "exams" | "planner">(initialTab);
   const [newNoteOpen, setNewNoteOpen]             = useState(false);
   const [onboardingOpen, setOnboardingOpen]       = useState(false);
   const [subscription, setSubscription]           = useState<Subscription | null>(null);
@@ -1065,10 +1127,34 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
   const [studyMode, setStudyMode]               = useState(false);
   const [studyFlashcards, setStudyFlashcards]   = useState<Flashcard[]>([]);
   const [studyNoteTitle, setStudyNoteTitle]     = useState("");
+  const [studyNoteId, setStudyNoteId]           = useState<string | null>(null);
   const [studyLoading, setStudyLoading]         = useState(false);
   const [currentCard, setCurrentCard]           = useState(0);
   const [flipped, setFlipped]                   = useState(false);
   const reviewedCardsRef = useRef<Set<number>>(new Set());
+  const [sessionCorrect, setSessionCorrect]     = useState(0);
+  const [sessionIncorrect, setSessionIncorrect] = useState(0);
+  const [sessionDone, setSessionDone]           = useState(false);
+  const answeredCardsRef = useRef<Set<number>>(new Set());
+
+  // Planner state
+  const [plans, setPlans]                   = useState<StudyPlan[]>([]);
+  const [createPlanOpen, setCreatePlanOpen] = useState(false);
+  const [selectedPlan, setSelectedPlan]     = useState<StudyPlan | null>(null);
+  const [planDays, setPlanDays]             = useState<StudyPlanDay[]>([]);
+  const [planLoading, setPlanLoading]       = useState(false);
+  const planPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Weak areas + spaced repetition
+  const [weakAreas, setWeakAreas]   = useState<WeakArea[]>([]);
+  const [dueCards, setDueCards]     = useState<DueCard[]>([]);
+
+  // Version history
+  const [versionHistoryNote, setVersionHistoryNote] = useState<Note | null>(null);
+  const [versions, setVersions]                     = useState<NoteVersion[]>([]);
+  const [versionsLoading, setVersionsLoading]       = useState(false);
+  const [versionPreview, setVersionPreview]         = useState<{ version_number: number; title: string; content: string | null } | null>(null);
+  const [restoringVersion, setRestoringVersion]     = useState<number | null>(null);
 
   // Streak state
   const [streak, setStreak]             = useState<StreakData | null>(null);
@@ -1198,7 +1284,7 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
   useEffect(() => {
     async function init() {
       try {
-        const [meRes, notesRes, groupsRes, examsRes, subRes, foldersRes, streaksRes, notifsRes, adminRes] = await Promise.all([
+        const [meRes, notesRes, groupsRes, examsRes, subRes, foldersRes, streaksRes, notifsRes, adminRes, plansRes, weakRes, dueRes] = await Promise.all([
           fetch("/api/auth/me"),
           fetch("/api/notes"),
           fetch("/api/groups"),
@@ -1208,6 +1294,9 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
           fetch("/api/streaks"),
           fetch("/api/notifications"),
           fetch("/api/admin/check", { credentials: "include" }),
+          fetch("/api/plans"),
+          fetch("/api/flashcards/weak-areas"),
+          fetch("/api/flashcards/due"),
         ]);
 
         if (!meRes.ok) { router.replace("/login"); return; }
@@ -1258,6 +1347,21 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
         if (adminRes.ok) {
           const j = await adminRes.json() as { data?: { isAdmin?: boolean } };
           if (j.data?.isAdmin) setIsAdmin(true);
+        }
+
+        if (plansRes.ok) {
+          const j = await plansRes.json() as { data?: { plans: StudyPlan[] } };
+          if (Array.isArray(j.data?.plans)) setPlans(j.data.plans);
+        }
+
+        if (weakRes.ok) {
+          const j = await weakRes.json() as { data?: { weakAreas: WeakArea[] } };
+          if (Array.isArray(j.data?.weakAreas)) setWeakAreas(j.data.weakAreas);
+        }
+
+        if (dueRes.ok) {
+          const j = await dueRes.json() as { data?: { dueCards: DueCard[] } };
+          if (Array.isArray(j.data?.dueCards)) setDueCards(j.data.dueCards);
         }
 
         if (!localStorage.getItem("studyhub_onboarding_complete")) {
@@ -1352,11 +1456,70 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
     } catch { /* non-critical */ }
   }
 
-  async function openStudyMode(noteId: string, noteTitle: string) {
-    setStudyNoteTitle(noteTitle);
+  function openStudyModeWithCards(cards: Flashcard[], title: string, noteId: string | null = null) {
+    setStudyNoteTitle(title);
+    setStudyNoteId(noteId);
+    setStudyFlashcards(cards);
     setCurrentCard(0);
     setFlipped(false);
+    setSessionCorrect(0);
+    setSessionIncorrect(0);
+    setSessionDone(false);
     reviewedCardsRef.current = new Set();
+    answeredCardsRef.current = new Set();
+    setStudyMode(true);
+  }
+
+  async function recordAnswer(flashcardId: string, correct: boolean) {
+    const noteId = studyNoteId ?? "";
+    void fetch("/api/flashcards/performance", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ flashcardId, noteId, correct }),
+    }).catch(() => {});
+
+    const total = studyFlashcards.length;
+    answeredCardsRef.current.add(currentCard);
+    if (correct) setSessionCorrect((c) => c + 1);
+    else         setSessionIncorrect((c) => c + 1);
+
+    if (answeredCardsRef.current.size >= total) {
+      setSessionDone(true);
+    } else {
+      setCurrentCard((c) => (c + 1 < total ? c + 1 : 0));
+      setFlipped(false);
+    }
+  }
+
+  function startWeakAreaReview() {
+    const cards: Flashcard[] = weakAreas.map((a) => ({
+      id: a.flashcard_id,
+      question: a.question,
+      answer: a.answer,
+    }));
+    openStudyModeWithCards(cards, "Weak Areas Review");
+  }
+
+  function startDueReview() {
+    const cards: Flashcard[] = dueCards.map((d) => ({
+      id: d.flashcard_id,
+      question: d.question,
+      answer: d.answer,
+    }));
+    openStudyModeWithCards(cards, "Spaced Repetition Review");
+  }
+
+  async function openStudyMode(noteId: string, noteTitle: string) {
+    setStudyNoteTitle(noteTitle);
+    setStudyNoteId(noteId);
+    setCurrentCard(0);
+    setFlipped(false);
+    setSessionCorrect(0);
+    setSessionIncorrect(0);
+    setSessionDone(false);
+    reviewedCardsRef.current = new Set();
+    answeredCardsRef.current = new Set();
     setStudyMode(true);
     const cached = flashcardsMap[noteId];
     if (cached && cached.length > 0) {
@@ -1375,6 +1538,105 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
       setStudyLoading(false);
     }
   }
+  async function openPlanDetail(plan: StudyPlan) {
+    setSelectedPlan(plan);
+    setPlanLoading(true);
+    try {
+      const res = await fetch(`/api/plans/${plan.id}`);
+      if (!res.ok) return;
+      const j = await res.json() as { data?: { plan: StudyPlan; days: StudyPlanDay[] } };
+      if (j.data) {
+        setSelectedPlan(j.data.plan);
+        setPlanDays(j.data.days);
+      }
+    } finally {
+      setPlanLoading(false);
+    }
+  }
+
+  async function togglePlanDay(planId: string, dayId: string, completed: boolean) {
+    const res = await fetch(`/api/plans/${planId}/days/${dayId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ is_completed: completed }),
+    });
+    if (!res.ok) return;
+    setPlanDays((prev) => prev.map((d) => d.id === dayId ? { ...d, is_completed: completed } : d));
+    setPlans((prev) => prev.map((p) => {
+      if (p.id !== planId) return p;
+      const delta = completed ? 1 : -1;
+      return { ...p, progress: { ...p.progress, completed: p.progress.completed + delta } };
+    }));
+  }
+
+  async function deletePlan(planId: string) {
+    const res = await fetch(`/api/plans/${planId}`, { method: "DELETE" });
+    if (!res.ok) return;
+    setPlans((prev) => prev.filter((p) => p.id !== planId));
+    if (selectedPlan?.id === planId) setSelectedPlan(null);
+  }
+
+  function startPlanPoll(planId: string) {
+    if (planPollRef.current) clearInterval(planPollRef.current);
+    let elapsed = 0;
+    planPollRef.current = setInterval(async () => {
+      elapsed += 3000;
+      if (elapsed > 120_000) { clearInterval(planPollRef.current!); return; }
+      try {
+        const res = await fetch(`/api/plans/${planId}`);
+        if (!res.ok) return;
+        const j = await res.json() as { data?: { plan: StudyPlan; days: StudyPlanDay[] } };
+        if (j.data?.plan.status === "ready") {
+          clearInterval(planPollRef.current!);
+          setPlans((prev) => prev.map((p) => p.id === planId ? { ...p, status: "ready", progress: { total: j.data!.days.length, completed: 0 } } : p));
+          setSelectedPlan(j.data.plan);
+          setPlanDays(j.data.days);
+        } else if (j.data?.plan.status === "failed") {
+          clearInterval(planPollRef.current!);
+          setPlans((prev) => prev.map((p) => p.id === planId ? { ...p, status: "failed" } : p));
+        }
+      } catch { /* ignore */ }
+    }, 3000);
+  }
+
+  async function openVersionHistory(note: Note) {
+    setVersionHistoryNote(note);
+    setVersions([]);
+    setVersionPreview(null);
+    setVersionsLoading(true);
+    try {
+      const res = await fetch(`/api/notes/${note.id}/versions`);
+      if (!res.ok) return;
+      const j = await res.json() as { data?: { versions: NoteVersion[] } };
+      setVersions(Array.isArray(j.data?.versions) ? j.data.versions : []);
+    } finally {
+      setVersionsLoading(false);
+    }
+  }
+
+  async function previewVersion(noteId: string, versionNumber: number) {
+    const res = await fetch(`/api/notes/${noteId}/versions/${versionNumber}`);
+    if (!res.ok) return;
+    const j = await res.json() as { data?: { version: { version_number: number; title: string; content: string | null } } };
+    if (j.data?.version) setVersionPreview(j.data.version);
+  }
+
+  async function restoreVersion(noteId: string, versionNumber: number) {
+    setRestoringVersion(versionNumber);
+    try {
+      const res = await fetch(`/api/notes/${noteId}/versions/${versionNumber}/restore`, { method: "POST" });
+      if (!res.ok) return;
+      const j = await res.json() as { data?: { note: Note } };
+      if (j.data?.note) {
+        setNotes((prev) => prev.map((n) => n.id === noteId ? { ...n, ...j.data!.note } : n));
+      }
+      setVersionHistoryNote(null);
+      setVersionPreview(null);
+    } finally {
+      setRestoringVersion(null);
+    }
+  }
+
   async function handleExamSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!examFile) { setExamError("Please select a file"); return; }
@@ -1468,6 +1730,31 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
     const total = studyFlashcards.length;
     const card  = studyFlashcards[currentCard];
 
+    // Session complete screen
+    if (sessionDone) {
+      const totalAnswered = sessionCorrect + sessionIncorrect;
+      const pct = totalAnswered > 0 ? Math.round((sessionCorrect / totalAnswered) * 100) : 0;
+      const msg = pct >= 80 ? "Excellent work! Keep it up 🏆" : pct >= 60 ? "Good effort! Review the tricky ones 💪" : "Keep practicing — you'll get there! 📚";
+      return (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 bg-background p-6">
+          <div className="text-5xl">{pct >= 80 ? "🏆" : pct >= 60 ? "💪" : "📚"}</div>
+          <h2 className="text-2xl font-bold">Session Complete!</h2>
+          <p className="text-4xl font-bold text-accent">{sessionCorrect}/{totalAnswered} correct</p>
+          <p className="text-muted-foreground">{msg}</p>
+          <div className="flex gap-3">
+            <button onClick={() => { setSessionDone(false); setCurrentCard(0); setFlipped(false); answeredCardsRef.current = new Set(); setSessionCorrect(0); setSessionIncorrect(0); }}
+              className="rounded-xl border border-border px-6 py-3 text-sm font-medium hover:bg-muted">
+              Study Again
+            </button>
+            <button onClick={() => setStudyMode(false)}
+              className="rounded-xl bg-accent px-6 py-3 text-sm font-medium text-accent-foreground">
+              Done
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="fixed inset-0 z-50 flex flex-col bg-background">
         {/* Header */}
@@ -1539,13 +1826,15 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
         {/* Navigation buttons */}
         {!studyLoading && total > 0 && (
           <div className="flex flex-shrink-0 gap-3 px-6 pb-4">
-            <button
-              onClick={() => { setCurrentCard((c) => Math.max(0, c - 1)); setFlipped(false); }}
-              disabled={currentCard === 0}
-              className="flex-1 rounded-xl border border-border py-3 text-sm font-medium transition-colors hover:bg-muted disabled:opacity-30"
-            >
-              ← Previous
-            </button>
+            {!flipped && (
+              <button
+                onClick={() => { setCurrentCard((c) => Math.max(0, c - 1)); setFlipped(false); }}
+                disabled={currentCard === 0}
+                className="flex-1 rounded-xl border border-border py-3 text-sm font-medium transition-colors hover:bg-muted disabled:opacity-30"
+              >
+                ← Previous
+              </button>
+            )}
             {!flipped ? (
               <button
                 onClick={() => {
@@ -1559,20 +1848,25 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
               >
                 Reveal Answer
               </button>
-            ) : currentCard < total - 1 ? (
-              <button
-                onClick={() => { setCurrentCard((c) => c + 1); setFlipped(false); }}
-                className="flex-1 rounded-xl bg-accent py-3 text-sm font-medium text-accent-foreground transition-opacity hover:opacity-90"
-              >
-                Next Card →
-              </button>
             ) : (
-              <button
-                onClick={() => { setCurrentCard(0); setFlipped(false); }}
-                className="flex-1 rounded-xl bg-accent py-3 text-sm font-medium text-accent-foreground transition-opacity hover:opacity-90"
-              >
-                Start Over 🎉
-              </button>
+              <>
+                <button
+                  onClick={() => void recordAnswer(card.id, false)}
+                  className="flex-1 rounded-xl border border-red-500/30 bg-red-500/10 py-3 text-sm font-medium text-red-400 transition-colors hover:bg-red-500/20"
+                >
+                  <span className="flex items-center justify-center gap-2">
+                    <ThumbsDown className="h-4 w-4" /> Got it Wrong
+                  </span>
+                </button>
+                <button
+                  onClick={() => void recordAnswer(card.id, true)}
+                  className="flex-1 rounded-xl border border-green-500/30 bg-green-500/10 py-3 text-sm font-medium text-green-400 transition-colors hover:bg-green-500/20"
+                >
+                  <span className="flex items-center justify-center gap-2">
+                    <ThumbsUp className="h-4 w-4" /> Got it Right
+                  </span>
+                </button>
+              </>
             )}
           </div>
         )}
@@ -1719,9 +2013,10 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
         <div className="mx-auto flex max-w-4xl gap-0">
           {(
             [
-              { id: "notes",  label: "Notes",   icon: <BookOpen className="h-4 w-4" /> },
-              { id: "groups", label: "Groups",  icon: <Users className="h-4 w-4" /> },
-              { id: "exams",  label: "Exams",   icon: <GraduationCap className="h-4 w-4" /> },
+              { id: "notes",   label: "Notes",   icon: <BookOpen className="h-4 w-4" /> },
+              { id: "groups",  label: "Groups",  icon: <Users className="h-4 w-4" /> },
+              { id: "exams",   label: "Exams",   icon: <GraduationCap className="h-4 w-4" /> },
+              { id: "planner", label: "Planner", icon: <Calendar className="h-4 w-4" /> },
             ] as const
           ).map(({ id, label, icon }) => (
             <button
@@ -1747,6 +2042,49 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
 
         {/* Streak widget */}
         {streak && <StreakWidget streak={streak} />}
+
+        {/* Weak areas */}
+        {weakAreas.length > 0 && (
+          <div className="mb-4 rounded-xl border border-red-500/20 bg-red-500/5 p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">⚠️</span>
+                <div>
+                  <p className="text-sm font-semibold">Weak Areas Detected</p>
+                  <p className="text-xs text-muted-foreground">{weakAreas.length} flashcard{weakAreas.length !== 1 ? "s" : ""} need more practice</p>
+                </div>
+              </div>
+              <button onClick={startWeakAreaReview}
+                className="rounded-lg bg-red-500/20 px-3 py-1.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/30">
+                Review Now
+              </button>
+            </div>
+            <div className="space-y-1.5">
+              {weakAreas.slice(0, 3).map((area) => (
+                <div key={area.flashcard_id} className="flex items-center justify-between rounded-lg bg-background/50 px-3 py-2">
+                  <p className="flex-1 truncate text-sm">{area.question}</p>
+                  <span className="ml-2 shrink-0 text-xs font-medium text-red-400">{area.accuracy_pct}% accurate</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Due for review */}
+        {dueCards.length > 0 && (
+          <div className="mb-4 rounded-xl border border-accent/20 bg-accent/5 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold">📅 Cards Due for Review</p>
+                <p className="text-xs text-muted-foreground">{dueCards.length} card{dueCards.length !== 1 ? "s" : ""} scheduled for today</p>
+              </div>
+              <button onClick={startDueReview}
+                className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground">
+                Start Review
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* ── Notes tab ── */}
         {tab === "notes" && (
@@ -1904,6 +2242,7 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
                           onDelete={handleNoteDeleted}
                           onStudy={openStudyMode}
                           onMove={setMoveNoteTarget}
+                          onHistory={openVersionHistory}
                         />
                       ))}
                     </div>
@@ -2052,7 +2391,497 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
             </div>
           </>
         )}
+        {/* ── Planner tab ── */}
+        {tab === "planner" && (
+          <PlannerTab
+            plans={plans}
+            notes={notes}
+            selectedPlan={selectedPlan}
+            planDays={planDays}
+            planLoading={planLoading}
+            createPlanOpen={createPlanOpen}
+            onCreatePlanOpen={() => setCreatePlanOpen(true)}
+            onCreatePlanClose={() => setCreatePlanOpen(false)}
+            onPlanCreated={(plan) => {
+              setPlans((prev) => [plan, ...prev]);
+              setSelectedPlan(plan);
+              startPlanPoll(plan.id);
+            }}
+            onPlanSelect={openPlanDetail}
+            onPlanBack={() => setSelectedPlan(null)}
+            onDayToggle={togglePlanDay}
+            onPlanDelete={deletePlan}
+          />
+        )}
+
       </main>
+
+      {/* Version history slide-over */}
+      {versionHistoryNote && (
+        <VersionHistorySlideOver
+          note={versionHistoryNote}
+          versions={versions}
+          loading={versionsLoading}
+          preview={versionPreview}
+          restoringVersion={restoringVersion}
+          onPreview={(vNum) => void previewVersion(versionHistoryNote.id, vNum)}
+          onRestore={(vNum) => void restoreVersion(versionHistoryNote.id, vNum)}
+          onClose={() => { setVersionHistoryNote(null); setVersionPreview(null); }}
+        />
+      )}
+
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// PlannerTab
+// ---------------------------------------------------------------------------
+
+function PlannerTab({
+  plans, notes, selectedPlan, planDays, planLoading,
+  createPlanOpen,
+  onCreatePlanOpen, onCreatePlanClose, onPlanCreated,
+  onPlanSelect, onPlanBack, onDayToggle, onPlanDelete,
+}: {
+  plans: StudyPlan[];
+  notes: Note[];
+  selectedPlan: StudyPlan | null;
+  planDays: StudyPlanDay[];
+  planLoading: boolean;
+  createPlanOpen: boolean;
+  onCreatePlanOpen: () => void;
+  onCreatePlanClose: () => void;
+  onPlanCreated: (plan: StudyPlan) => void;
+  onPlanSelect: (plan: StudyPlan) => void;
+  onPlanBack: () => void;
+  onDayToggle: (planId: string, dayId: string, completed: boolean) => void;
+  onPlanDelete: (planId: string) => void;
+}) {
+  const today = new Date().toISOString().split("T")[0];
+
+  function daysUntil(dateStr: string) {
+    const diff = Math.ceil((new Date(dateStr).getTime() - new Date(today).getTime()) / 86_400_000);
+    return diff;
+  }
+
+  if (selectedPlan) {
+    const todayTask = planDays.find((d) => d.is_today);
+    return (
+      <div>
+        <div className="mb-6 flex items-center gap-3">
+          <button onClick={onPlanBack} className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground">
+            ← Back
+          </button>
+          <div className="flex-1">
+            <h1 className="text-xl font-bold">{selectedPlan.title}</h1>
+            <p className="text-sm text-muted-foreground">
+              📅 Exam on {new Date(selectedPlan.exam_date).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })}
+              {" · "}
+              {daysUntil(selectedPlan.exam_date)} day{daysUntil(selectedPlan.exam_date) !== 1 ? "s" : ""} away
+            </p>
+          </div>
+        </div>
+
+        {/* Progress */}
+        <div className="mb-6 rounded-xl border border-border bg-card p-4">
+          <div className="mb-2 flex items-center justify-between text-sm">
+            <span className="font-medium">{selectedPlan.progress?.completed ?? planDays.filter(d => d.is_completed).length} of {selectedPlan.progress?.total ?? planDays.length} study days completed</span>
+            <span className="text-muted-foreground">
+              {selectedPlan.progress?.total ? Math.round(((selectedPlan.progress.completed) / selectedPlan.progress.total) * 100) : 0}%
+            </span>
+          </div>
+          <div className="h-2 rounded-full bg-border">
+            <div
+              className="h-2 rounded-full bg-accent transition-all"
+              style={{ width: `${selectedPlan.progress?.total ? Math.round(((selectedPlan.progress.completed) / selectedPlan.progress.total) * 100) : 0}%` }}
+            />
+          </div>
+        </div>
+
+        {selectedPlan.status === "generating" && (
+          <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-6">
+            <Loader2 className="h-5 w-5 animate-spin text-accent" />
+            <p className="text-sm text-muted-foreground">Generating your study plan… this takes about 20 seconds.</p>
+          </div>
+        )}
+
+        {selectedPlan.status === "failed" && (
+          <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+            Failed to generate plan. Please delete and try again.
+          </div>
+        )}
+
+        {/* Today's task highlight */}
+        {todayTask && (
+          <div className="mb-4 rounded-xl border border-accent/40 bg-accent/10 p-4">
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-accent">📚 Today</p>
+            <p className="font-semibold">{todayTask.title}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{todayTask.description}</p>
+          </div>
+        )}
+
+        {planLoading ? (
+          <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+        ) : (
+          <div className="space-y-3">
+            {planDays.map((day) => (
+              <div key={day.id} className={cn(
+                "rounded-xl border p-4 transition-all",
+                day.is_today  ? "border-accent/40 bg-accent/5" :
+                day.is_past   ? "border-border/40 opacity-60" :
+                "border-border bg-card",
+              )}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    <div className={cn(
+                      "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border",
+                      day.is_completed ? "border-green-500 bg-green-500/20 text-green-400" : "border-border",
+                    )}>
+                      {day.is_completed && <Check className="h-3 w-3" />}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(day.study_date + "T12:00:00").toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })}
+                        </span>
+                        {day.is_today && <span className="rounded-full bg-accent/20 px-2 py-0.5 text-xs font-medium text-accent">Today</span>}
+                      </div>
+                      <p className="mt-0.5 font-medium">{day.title}</p>
+                      <p className="mt-1 text-sm text-muted-foreground">{day.description}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => onDayToggle(day.plan_id, day.id, !day.is_completed)}
+                    className={cn(
+                      "shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
+                      day.is_completed
+                        ? "border border-border text-muted-foreground hover:text-foreground"
+                        : "bg-accent text-accent-foreground hover:opacity-90",
+                    )}
+                  >
+                    {day.is_completed ? "Undo" : "Mark Done"}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="mb-6 flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Study Planner</h1>
+          <p className="mt-1 text-sm text-muted-foreground">AI-generated day-by-day study schedules</p>
+        </div>
+        <button onClick={onCreatePlanOpen}
+          className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:opacity-90">
+          + Create Study Plan
+        </button>
+      </div>
+
+      {plans.length === 0 && !createPlanOpen ? (
+        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-16 text-center">
+          <Calendar className="mb-3 h-10 w-10 text-muted-foreground" />
+          <p className="font-medium">No study plans yet</p>
+          <p className="mt-1 text-sm text-muted-foreground">Create a plan to get a day-by-day study schedule</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {plans.map((plan) => {
+            const days = daysUntil(plan.exam_date);
+            return (
+              <div key={plan.id} className="rounded-xl border border-border bg-card p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold">{plan.title}</h3>
+                      {plan.status === "generating" && (
+                        <span className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                          <Loader2 className="h-3 w-3 animate-spin" />Generating…
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{plan.subject}</p>
+                    <span className={cn(
+                      "mt-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
+                      days > 7  ? "bg-green-500/15 text-green-400" :
+                      days >= 3 ? "bg-orange-500/15 text-orange-400" :
+                      "bg-red-500/15 text-red-400",
+                    )}>
+                      <Clock className="h-3 w-3" />
+                      {days > 0 ? `Exam in ${days} day${days !== 1 ? "s" : ""}` : "Exam today!"}
+                    </span>
+                  </div>
+                  <button onClick={() => onPlanDelete(plan.id)}
+                    className="rounded p-1 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-destructive">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+
+                {plan.status === "ready" && plan.progress && (
+                  <div className="mt-4">
+                    <div className="mb-1.5 flex items-center justify-between text-xs text-muted-foreground">
+                      <span>{plan.progress.completed}/{plan.progress.total} days completed</span>
+                      <span>{plan.progress.total > 0 ? Math.round((plan.progress.completed / plan.progress.total) * 100) : 0}%</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-border">
+                      <div className="h-1.5 rounded-full bg-accent transition-all"
+                        style={{ width: `${plan.progress.total > 0 ? (plan.progress.completed / plan.progress.total) * 100 : 0}%` }} />
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-4 flex gap-2">
+                  <button
+                    onClick={() => onPlanSelect(plan)}
+                    disabled={plan.status === "generating"}
+                    className="rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted disabled:opacity-50"
+                  >
+                    View Plan
+                  </button>
+                  <button onClick={() => onPlanDelete(plan.id)}
+                    className="rounded-lg border border-destructive/30 px-3 py-2 text-sm text-destructive transition-colors hover:bg-destructive/10">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Create Plan Modal */}
+      {createPlanOpen && (
+        <CreatePlanModal
+          notes={notes}
+          onClose={onCreatePlanClose}
+          onCreated={onPlanCreated}
+        />
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// CreatePlanModal
+// ---------------------------------------------------------------------------
+
+function CreatePlanModal({ notes, onClose, onCreated }: {
+  notes: Note[];
+  onClose: () => void;
+  onCreated: (plan: StudyPlan) => void;
+}) {
+  const [title, setTitle]       = useState("");
+  const [subject, setSubject]   = useState("");
+  const [examDate, setExamDate] = useState("");
+  const [selectedNotes, setSelectedNotes] = useState<string[]>([]);
+  const [error, setError]       = useState("");
+  const [loading, setLoading]   = useState(false);
+
+  const tomorrow = (() => {
+    const d = new Date(); d.setDate(d.getDate() + 1);
+    return d.toISOString().split("T")[0];
+  })();
+
+  function toggleNote(id: string) {
+    setSelectedNotes((prev) => prev.includes(id) ? prev.filter((n) => n !== id) : [...prev, id]);
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (selectedNotes.length === 0) { setError("Select at least one note"); return; }
+    setError(""); setLoading(true);
+    try {
+      const res = await fetch("/api/plans", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, subject, examDate, noteIds: selectedNotes }),
+      });
+      const j = await res.json() as { data?: { plan: StudyPlan }; error?: string };
+      if (!res.ok) { setError(j.error ?? "Failed to create plan"); return; }
+      onCreated(j.data!.plan);
+      onClose();
+    } catch { setError("Network error"); }
+    finally { setLoading(false); }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
+      <div className="relative flex w-full max-w-md flex-col max-h-[90vh] rounded-2xl border border-border bg-card shadow-2xl">
+        <div className="shrink-0 flex items-center justify-between border-b border-border px-6 py-4">
+          <h2 className="font-semibold">Create Study Plan</h2>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><XIcon className="h-5 w-5" /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+          <div className="flex-1 overflow-y-auto space-y-4 px-6 py-4" style={{ WebkitOverflowScrolling: "touch" }}>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Exam Title</label>
+              <input value={title} onChange={(e) => setTitle(e.target.value)} required
+                placeholder="e.g. Biology Final Exam"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Subject</label>
+              <input value={subject} onChange={(e) => setSubject(e.target.value)} required
+                placeholder="e.g. Biology"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Exam Date</label>
+              <input type="date" value={examDate} onChange={(e) => setExamDate(e.target.value)} required min={tomorrow}
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent" />
+            </div>
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <label className="text-xs font-medium text-muted-foreground">Select Notes</label>
+                <button type="button" onClick={() => setSelectedNotes(notes.map((n) => n.id))}
+                  className="text-xs text-accent hover:underline">Select all</button>
+              </div>
+              {notes.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No notes yet — create some notes first.</p>
+              ) : (
+                <div className="max-h-40 overflow-y-auto space-y-1.5 rounded-lg border border-border p-2">
+                  {notes.map((note) => (
+                    <label key={note.id} className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 hover:bg-muted">
+                      <input type="checkbox" checked={selectedNotes.includes(note.id)} onChange={() => toggleNote(note.id)}
+                        className="accent-accent" />
+                      <span className="truncate text-sm">{note.title}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+            {error && <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">{error}</p>}
+          </div>
+          <div className="shrink-0 flex gap-2 border-t border-border px-6 py-4">
+            <button type="button" onClick={onClose}
+              className="flex-1 rounded-lg border border-border py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+              Cancel
+            </button>
+            <button type="submit" disabled={loading}
+              className="flex-1 rounded-lg bg-accent py-2 text-sm font-medium text-accent-foreground hover:opacity-90 disabled:opacity-50">
+              {loading ? <span className="flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Generating…</span> : "Generate Study Plan"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// VersionHistorySlideOver
+// ---------------------------------------------------------------------------
+
+function VersionHistorySlideOver({ note, versions, loading, preview, restoringVersion, onPreview, onRestore, onClose }: {
+  note: Note;
+  versions: NoteVersion[];
+  loading: boolean;
+  preview: { version_number: number; title: string; content: string | null } | null;
+  restoringVersion: number | null;
+  onPreview: (vNum: number) => void;
+  onRestore: (vNum: number) => void;
+  onClose: () => void;
+}) {
+  const [confirmRestore, setConfirmRestore] = useState<number | null>(null);
+
+  function formatVersionDate(iso: string) {
+    const d = new Date(iso);
+    const today = new Date();
+    const isToday = d.toDateString() === today.toDateString();
+    const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+    const isYesterday = d.toDateString() === yesterday.toDateString();
+    const time = d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+    if (isToday) return `Today ${time}`;
+    if (isYesterday) return `Yesterday ${time}`;
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) + ` ${time}`;
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex">
+      <div className="flex-1 bg-black/50" onClick={onClose} />
+      <div className="flex h-full w-full max-w-lg flex-col border-l border-border bg-card">
+        <div className="shrink-0 flex items-center justify-between border-b border-border px-6 py-4">
+          <div>
+            <h2 className="font-semibold">Version History</h2>
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">{note.title}</p>
+          </div>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><XIcon className="h-5 w-5" /></button>
+        </div>
+
+        <div className="flex flex-1 min-h-0">
+          {/* Version list */}
+          <div className="flex w-56 shrink-0 flex-col border-r border-border">
+            <div className="flex-1 overflow-y-auto p-2">
+              {loading ? (
+                <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+              ) : versions.length === 0 ? (
+                <p className="p-4 text-center text-xs text-muted-foreground">No saved versions yet. Edit this note to create versions.</p>
+              ) : versions.map((v, i) => (
+                <div key={v.id}
+                  className={cn("mb-1 rounded-lg border p-3 cursor-pointer transition-colors",
+                    preview?.version_number === v.version_number ? "border-accent/40 bg-accent/5" : "border-transparent hover:bg-muted",
+                  )}
+                  onClick={() => onPreview(v.version_number)}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-accent">v{v.version_number}</span>
+                    {i === 0 && <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">latest</span>}
+                  </div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{formatVersionDate(v.created_at)}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Preview pane */}
+          <div className="flex flex-1 flex-col min-w-0">
+            {preview ? (
+              <>
+                <div className="flex-1 overflow-y-auto p-4" style={{ WebkitOverflowScrolling: "touch" }}>
+                  <p className="mb-1 text-xs font-medium text-muted-foreground">v{preview.version_number} — Title</p>
+                  <p className="mb-4 font-semibold">{preview.title}</p>
+                  <p className="mb-1 text-xs font-medium text-muted-foreground">Content</p>
+                  <p className="whitespace-pre-wrap text-sm text-muted-foreground">{preview.content ?? "(no content)"}</p>
+                </div>
+                <div className="shrink-0 border-t border-border p-4">
+                  {confirmRestore === preview.version_number ? (
+                    <div className="rounded-lg border border-border bg-muted p-3">
+                      <p className="mb-2 text-xs text-muted-foreground">Restore to v{preview.version_number}? Current version will be saved first.</p>
+                      <div className="flex gap-2">
+                        <button onClick={() => { onRestore(preview.version_number); setConfirmRestore(null); }}
+                          disabled={restoringVersion !== null}
+                          className="flex-1 rounded-lg bg-accent py-1.5 text-xs font-medium text-accent-foreground disabled:opacity-50">
+                          {restoringVersion === preview.version_number ? "Restoring…" : "Restore"}
+                        </button>
+                        <button onClick={() => setConfirmRestore(null)}
+                          className="flex-1 rounded-lg border border-border py-1.5 text-xs text-muted-foreground hover:text-foreground">
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button onClick={() => setConfirmRestore(preview.version_number)}
+                      className="flex w-full items-center justify-center gap-2 rounded-lg border border-border py-2 text-sm text-muted-foreground transition-colors hover:border-accent hover:text-foreground">
+                      <RotateCcw className="h-4 w-4" />
+                      Restore this version
+                    </button>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">
+                Select a version to preview
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -2064,8 +2893,8 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
 function DashboardWithParams() {
   const searchParams = useSearchParams();
   const rawTab = searchParams.get("tab");
-  const initialTab: "notes" | "groups" | "exams" =
-    rawTab === "groups" ? "groups" : rawTab === "exams" ? "exams" : "notes";
+  const initialTab: "notes" | "groups" | "exams" | "planner" =
+    rawTab === "groups" ? "groups" : rawTab === "exams" ? "exams" : rawTab === "planner" ? "planner" : "notes";
   return <DashboardPage initialTab={initialTab} />;
 }
 

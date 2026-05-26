@@ -69,6 +69,57 @@ export async function PATCH(request: Request, { params }: { params: Params }) {
   const parsed = UpdateNoteSchema.safeParse(body);
   if (!parsed.success) return validationErr(parsed.error);
 
+  // Save a version snapshot before updating (only when title or content changes)
+  if (parsed.data.title !== undefined || parsed.data.content !== undefined) {
+    const { data: current } = await supabase
+      .from("study_notes")
+      .select("title, content")
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .single();
+
+    if (current) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: latest } = await (supabase as any)
+        .from("note_versions")
+        .select("version_number")
+        .eq("note_id", id)
+        .order("version_number", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const nextVNum = ((latest?.version_number as number | null) ?? 0) + 1;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from("note_versions")
+        .insert({
+          note_id:        id,
+          user_id:        user.id,
+          version_number: nextVNum,
+          title:          current.title,
+          content:        current.content,
+        });
+
+      // Keep only last 10 versions — delete older ones
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: allVersions } = await (supabase as any)
+        .from("note_versions")
+        .select("id, version_number")
+        .eq("note_id", id)
+        .order("version_number", { ascending: false });
+
+      if (Array.isArray(allVersions) && allVersions.length > 10) {
+        const toDelete = (allVersions as { id: string }[]).slice(10).map((v) => v.id);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any)
+          .from("note_versions")
+          .delete()
+          .in("id", toDelete);
+      }
+    }
+  }
+
   const { data: note, error } = await supabase
     .from("study_notes")
     .update(parsed.data)

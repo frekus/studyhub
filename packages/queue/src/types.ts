@@ -41,3 +41,13 @@ export type GroupExamPredictPayload = {
   papersCount: number;
   membersCount: number;
 };
+
+export type StudyPlanGeneratePayload = {
+  planId: string;
+  userId: string;
+  examDate: string;
+  subject: string;
+  noteIds: string[];
+  notesTitles: string[];
+  daysUntilExam: number;
+};

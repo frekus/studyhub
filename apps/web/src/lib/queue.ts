@@ -1,7 +1,7 @@
 import { publishMessage } from "@studyhub/queue";
-import type { NoteSummarizePayload, NoteFlashcardsPayload, ExamPredictPayload, GroupNoteSummarizePayload, GroupExamPredictPayload } from "@studyhub/queue";
+import type { NoteSummarizePayload, NoteFlashcardsPayload, ExamPredictPayload, GroupNoteSummarizePayload, GroupExamPredictPayload, StudyPlanGeneratePayload } from "@studyhub/queue";
 
-export type { NoteSummarizePayload, NoteFlashcardsPayload, ExamPredictPayload };
+export type { NoteSummarizePayload, NoteFlashcardsPayload, ExamPredictPayload, StudyPlanGeneratePayload };
 
 export async function tryPublishNoteSummarize(payload: NoteSummarizePayload): Promise<void> {
   try {
@@ -42,5 +42,13 @@ export async function tryPublishGroupExamPredict(payload: GroupExamPredictPayloa
     await publishMessage("group.exam.predict", payload);
   } catch (error) {
     console.error("[queue] Failed to publish group.exam.predict — RabbitMQ may be down:", error);
+  }
+}
+
+export async function tryPublishStudyPlanGenerate(payload: StudyPlanGeneratePayload): Promise<void> {
+  try {
+    await publishMessage("study.plan.generate", payload);
+  } catch (error) {
+    console.error("[queue] Failed to publish study.plan.generate — RabbitMQ may be down:", error);
   }
 }
