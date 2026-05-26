@@ -490,7 +490,7 @@ function SharedNoteCard({ note, currentUserId, onView, onStudy }: {
   const dateStr = new Date(note.shared_at).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 
   return (
-    <div className="rounded-xl border border-border/60 border-l-4 border-l-accent bg-card p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+    <div className="rounded-xl border border-border/60 bg-card p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md [border-left:4px_solid_hsl(var(--accent))]">
       <p className="font-semibold leading-snug">{note.title}</p>
       <p className="mt-0.5 text-xs text-muted-foreground">Shared by {note.sharer_name} · {dateStr}</p>
       {summaryPreview ? (
@@ -1334,7 +1334,7 @@ export default function GroupDetailPage() {
       )}
 
       {/* Header */}
-      <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur-sm px-6 py-4">
+      <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur-sm px-4 sm:px-6 py-3 sm:py-4">
         <div className="mx-auto flex max-w-4xl items-center justify-between">
           <Link href="/" className="flex items-center gap-2 transition-opacity hover:opacity-80">
             <BookOpen className="h-5 w-5 text-orange-400" />
@@ -1353,18 +1353,18 @@ export default function GroupDetailPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-4xl px-6 py-8">
-        <Link href="/dashboard" className="mb-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
+      <main className="mx-auto max-w-4xl px-4 sm:px-6 py-6 sm:py-8">
+        <Link href="/dashboard" className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
           <ArrowLeft className="h-4 w-4" />Back to dashboard
         </Link>
 
         {/* Group header */}
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="mb-6 flex flex-col gap-3">
           <div>
-            <h1 className="text-3xl font-bold">{group.name}</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold break-words">{group.name}</h1>
             <p className="mt-1 text-sm text-muted-foreground">{members.length} member{members.length === 1 ? "" : "s"}</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
+          <div className="flex flex-wrap gap-2">
             <InviteDialog groupId={group.id} />
             <ShareNoteDialog groupId={group.id} myNotes={myNotes} members={members} onShared={handleNoteShared} />
             {myRole && myRole !== "owner" && (
@@ -1379,10 +1379,10 @@ export default function GroupDetailPage() {
         <div className="grid gap-8 lg:grid-cols-4">
           <aside className="lg:col-span-1">
             <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Members</h2>
-            <div className="space-y-1.5">
+            <div className="flex gap-2 overflow-x-auto scrollbar-hide lg:flex-col lg:space-y-1.5 lg:gap-0">
               {members.map((m) => (
-                <div key={m.id} className="flex items-center justify-between rounded-lg border border-border/60 bg-card px-3 py-2">
-                  <span className="truncate text-sm">{m.users?.full_name ?? `User ${m.user_id.slice(0, 8)}`}</span>
+                <div key={m.id} className="flex shrink-0 items-center justify-between rounded-lg border border-border/60 bg-card px-3 py-2 lg:shrink lg:w-full">
+                  <span className="truncate text-sm whitespace-nowrap lg:whitespace-normal">{m.users?.full_name ?? `User ${m.user_id.slice(0, 8)}`}</span>
                   {m.role === "owner" && <Crown className="ml-2 h-3 w-3 shrink-0 text-yellow-400" />}
                 </div>
               ))}
@@ -1391,13 +1391,13 @@ export default function GroupDetailPage() {
 
           <section className="lg:col-span-3">
             {/* Tabs */}
-            <div className="scrollbar-hide mb-5 -mx-4 flex overflow-x-auto border-b border-border px-4 sm:-mx-0 sm:px-0">
+            <div className="scrollbar-hide mb-5 -mx-4 flex overflow-x-auto border-b border-border px-4">
               {TABS.map((t) => (
                 <button
                   key={t.key}
                   onClick={() => setActiveTab(t.key)}
                   className={cn(
-                    "shrink-0 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-medium transition-colors",
+                    "shrink-0 whitespace-nowrap border-b-2 px-2.5 py-2 text-xs sm:text-sm sm:px-3 sm:py-2.5 font-medium transition-colors",
                     activeTab === t.key
                       ? "border-accent text-accent"
                       : "border-transparent text-muted-foreground hover:text-foreground"

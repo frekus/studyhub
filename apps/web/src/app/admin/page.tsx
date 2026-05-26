@@ -9,7 +9,7 @@ import {
   ArrowLeft, Search, ChevronDown, MoreHorizontal,
   Loader2, RefreshCw, Trash2, ShieldOff, ShieldCheck,
   KeyRound, Download, Menu, X, ChevronLeft, ChevronRight,
-  TrendingUp, FileText, Zap, Crown,
+  TrendingUp, FileText, Zap, Crown, UserCog, Plus, Clock,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -60,7 +60,19 @@ interface ActivityItem {
   created_at: string;
 }
 
-type NavTab = "dashboard" | "users" | "subscriptions" | "activity" | "settings";
+type NavTab = "dashboard" | "users" | "subscriptions" | "activity" | "admins" | "settings";
+
+interface AdminEntry {
+  id: string;
+  user_id: string;
+  email: string;
+  role: string;
+  privileges: Record<string, boolean> | null;
+  expires_at: string | null;
+  notes: string | null;
+  granted_by_email: string | null;
+  created_at: string;
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -97,6 +109,47 @@ const STATUS_COLORS: Record<string, string> = {
   past_due:  "bg-yellow-900/40 text-yellow-400",
   suspended: "bg-red-900/40 text-red-400",
 };
+
+// ---------------------------------------------------------------------------
+// Tooltip
+// ---------------------------------------------------------------------------
+
+function Tooltip({ label, direction = "above", children }: {
+  label: string;
+  direction?: "above" | "below" | "right";
+  children: React.ReactNode;
+}) {
+  const pos = {
+    above: "bottom-full left-1/2 -translate-x-1/2 mb-1.5",
+    below: "top-full left-1/2 -translate-x-1/2 mt-1.5",
+    right: "left-full top-1/2 -translate-y-1/2 ml-2",
+  };
+  return (
+    <div className="group/tooltip relative inline-flex">
+      {children}
+      <span className={cn(
+        "pointer-events-none absolute z-50 whitespace-nowrap rounded-md border border-[#1a3330] bg-[#0D2B27] px-2 py-1 text-xs text-white shadow-lg",
+        "opacity-0 transition-opacity delay-300 group-hover/tooltip:opacity-100",
+        pos[direction],
+      )}>
+        {label}
+      </span>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Plan helpers
+// ---------------------------------------------------------------------------
+
+const PLAN_ORDER: Record<string, number> = { free: 0, popular: 1, pro: 2 };
+
+function planLabel(from: string, to: string): string {
+  const diff = (PLAN_ORDER[to] ?? 0) - (PLAN_ORDER[from] ?? 0);
+  const name = to.charAt(0).toUpperCase() + to.slice(1);
+  if (diff > 0) return `Upgrade to ${name}`;
+  return `Downgrade to ${name}`;
+}
 
 function PlanBadge({ plan }: { plan: string }) {
   return (
@@ -293,16 +346,14 @@ function UserDetailSlideOver({ userId, onClose, onUpdated }: {
               <Row label="Status" value={<StatusBadge status={detail.profile.subscription_status as string} />} />
               <Row label="Expires" value={detail.profile.subscription_expires_at ? fmtDate(detail.profile.subscription_expires_at as string) : "Never (free)"} />
               <div className="pt-2 flex flex-wrap gap-2">
-                {["free", "popular", "pro"].map((plan) => (
-                  <button key={plan} onClick={() => changePlan(plan)} disabled={busy}
-                    className={cn("rounded-full px-3 py-1 text-xs font-medium transition-colors",
-                      detail.profile.subscription_tier === plan
-                        ? "bg-teal-600 text-white"
-                        : "bg-[#0D2B27] border border-[#1a3330] text-[#6b8f88] hover:text-white hover:border-teal-700"
-                    )}>
-                    {plan.charAt(0).toUpperCase() + plan.slice(1)}
-                  </button>
-                ))}
+                {(["free", "popular", "pro"] as const)
+                  .filter((plan) => plan !== detail.profile.subscription_tier)
+                  .map((plan) => (
+                    <button key={plan} onClick={() => changePlan(plan)} disabled={busy}
+                      className="rounded-full px-3 py-1 text-xs font-medium bg-[#0D2B27] border border-[#1a3330] text-[#6b8f88] hover:text-white hover:border-teal-700 transition-colors disabled:opacity-50">
+                      {planLabel(detail.profile.subscription_tier as string, plan)}
+                    </button>
+                  ))}
               </div>
             </Section>
 
@@ -450,9 +501,13 @@ function UserRowMenu({ user, onRefresh, onView }: { user: AdminUser; onRefresh: 
             </MenuItem>
             {subOpen && (
               <div className="absolute right-0 top-full z-50 mt-0.5 w-44 rounded-xl border border-[#1a3330] bg-[#071A18] shadow-xl py-1">
-                <MenuItem onClick={() => changePlan("popular")}>Upgrade to Popular</MenuItem>
-                <MenuItem onClick={() => changePlan("pro")}>Upgrade to Pro</MenuItem>
-                <MenuItem onClick={() => changePlan("free")}>Downgrade to Free</MenuItem>
+                {(["free", "popular", "pro"] as const)
+                  .filter((p) => p !== user.subscription_tier)
+                  .map((p) => (
+                    <MenuItem key={p} onClick={() => changePlan(p)}>
+                      {planLabel(user.subscription_tier, p)}
+                    </MenuItem>
+                  ))}
               </div>
             )}
           </div>
@@ -940,6 +995,348 @@ function ActivityTab() {
 }
 
 // ---------------------------------------------------------------------------
+// Admins Tab
+// ---------------------------------------------------------------------------
+
+const PRIVILEGE_PRESETS = [
+  { key: "full_access",    label: "Full Access",       desc: "All privileges" },
+  { key: "manage_users",   label: "Manage Users",      desc: "Edit/suspend/delete users" },
+  { key: "manage_billing", label: "Manage Billing",    desc: "Change subscription plans" },
+  { key: "view_activity",  label: "View Activity",     desc: "Read-only activity feed" },
+  { key: "export_data",    label: "Export Data",       desc: "Export CSV reports" },
+];
+
+function AdminsTab({ currentUserId, isSuperAdmin }: { currentUserId: string; isSuperAdmin: boolean }) {
+  const [admins, setAdmins]   = useState<AdminEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [grantOpen, setGrantOpen] = useState(false);
+  const [busy, setBusy]       = useState(false);
+  const [editTarget, setEditTarget] = useState<AdminEntry | null>(null);
+
+  // Grant form state
+  const [grantEmail, setGrantEmail]   = useState("");
+  const [grantUserId, setGrantUserId] = useState("");
+  const [grantRole, setGrantRole]     = useState<"admin" | "super_admin">("admin");
+  const [grantPrivs, setGrantPrivs]   = useState<Record<string, boolean>>({});
+  const [grantExpiry, setGrantExpiry] = useState("");
+  const [grantNotes, setGrantNotes]   = useState("");
+  const [grantError, setGrantError]   = useState("");
+  const [lookupBusy, setLookupBusy]   = useState(false);
+
+  async function load() {
+    setLoading(true);
+    const res = await fetch("/api/admin/admins");
+    const j   = await res.json();
+    setAdmins(j.data?.admins ?? []);
+    setLoading(false);
+  }
+
+  useEffect(() => { void load(); }, []);
+
+  async function lookupUser() {
+    if (!grantEmail.trim()) return;
+    setLookupBusy(true); setGrantError(""); setGrantUserId("");
+    const res = await fetch(`/api/admin/users?search=${encodeURIComponent(grantEmail)}&limit=1`);
+    const j   = await res.json();
+    const found = j.data?.users?.[0];
+    if (found) { setGrantUserId(found.id); }
+    else { setGrantError("No user found with that email."); }
+    setLookupBusy(false);
+  }
+
+  async function handleGrant(e: React.FormEvent) {
+    e.preventDefault();
+    if (!grantUserId) { setGrantError("Look up the user first."); return; }
+    setBusy(true); setGrantError("");
+    const body = {
+      user_id: grantUserId,
+      role: grantRole,
+      privileges: Object.keys(grantPrivs).length > 0 ? grantPrivs : undefined,
+      expires_at: grantExpiry ? new Date(grantExpiry).toISOString() : null,
+      notes: grantNotes || null,
+    };
+    const res = await fetch("/api/admin/admins", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const j = await res.json();
+      setGrantError(j.error ?? "Failed to grant access");
+    } else {
+      setGrantOpen(false); setGrantEmail(""); setGrantUserId(""); setGrantRole("admin");
+      setGrantPrivs({}); setGrantExpiry(""); setGrantNotes("");
+      void load();
+    }
+    setBusy(false);
+  }
+
+  async function handleUpdate(adminEntry: AdminEntry, updates: Partial<AdminEntry>) {
+    setBusy(true);
+    await fetch(`/api/admin/admins/${adminEntry.user_id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updates),
+    });
+    setEditTarget(null);
+    setBusy(false);
+    void load();
+  }
+
+  async function handleRevoke(adminEntry: AdminEntry) {
+    if (!confirm(`Revoke admin access for ${adminEntry.email}?`)) return;
+    setBusy(true);
+    await fetch(`/api/admin/admins/${adminEntry.user_id}`, { method: "DELETE" });
+    setBusy(false);
+    void load();
+  }
+
+  const isExpired = (iso: string | null) => iso ? new Date(iso) < new Date() : false;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-[#6b8f88]">{admins.length} admin{admins.length !== 1 ? "s" : ""} configured</p>
+        <div className="flex gap-2">
+          <button onClick={() => void load()} className="flex items-center gap-1.5 text-xs text-[#6b8f88] hover:text-teal-400 transition-colors">
+            <RefreshCw className="h-3.5 w-3.5" />Refresh
+          </button>
+          {isSuperAdmin && (
+            <button onClick={() => setGrantOpen(true)}
+              className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 transition-colors">
+              <Plus className="h-3.5 w-3.5" />Grant Access
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Admins table */}
+      <div className="rounded-xl border border-[#1a3330] overflow-hidden">
+        {loading ? (
+          <div className="flex items-center justify-center py-12"><Loader2 className="h-5 w-5 animate-spin text-teal-500" /></div>
+        ) : (
+          <div className="divide-y divide-[#1a3330]">
+            {admins.map((a) => {
+              const expired = isExpired(a.expires_at);
+              return (
+                <div key={a.id} className={cn("flex items-start gap-4 p-4", expired && "opacity-60")}>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-medium text-white text-sm">{a.email}</p>
+                      <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase",
+                        a.role === "super_admin" ? "bg-orange-900/40 text-orange-400" : "bg-teal-900/40 text-teal-400")}>
+                        {a.role === "super_admin" ? "Super Admin" : "Admin"}
+                      </span>
+                      {expired && <span className="rounded-full bg-red-900/40 px-2 py-0.5 text-[10px] font-semibold text-red-400 uppercase">Expired</span>}
+                    </div>
+                    <div className="mt-1 flex flex-wrap gap-1.5">
+                      {a.privileges && Object.entries(a.privileges)
+                        .filter(([, v]) => v)
+                        .map(([k]) => (
+                          <span key={k} className="rounded-md bg-[#1a3330] px-1.5 py-0.5 text-[10px] text-[#95b8b0]">
+                            {PRIVILEGE_PRESETS.find((p) => p.key === k)?.label ?? k}
+                          </span>
+                        ))}
+                    </div>
+                    <div className="mt-1 flex flex-wrap gap-3 text-xs text-[#6b8f88]">
+                      {a.expires_at && (
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {expired ? "Expired" : "Expires"} {fmtDate(a.expires_at)}
+                        </span>
+                      )}
+                      {a.granted_by_email && <span>Granted by {a.granted_by_email}</span>}
+                      {a.notes && <span className="italic">{a.notes}</span>}
+                    </div>
+                  </div>
+                  {isSuperAdmin && a.user_id !== currentUserId && (
+                    <div className="flex shrink-0 gap-1.5">
+                      <button onClick={() => setEditTarget(a)}
+                        className="rounded-md border border-[#1a3330] px-2.5 py-1 text-xs text-[#6b8f88] hover:text-white hover:border-teal-700 transition-colors">
+                        Edit
+                      </button>
+                      <button onClick={() => handleRevoke(a)} disabled={busy}
+                        className="rounded-md border border-red-800/40 px-2.5 py-1 text-xs text-red-400 hover:bg-red-900/20 transition-colors disabled:opacity-50">
+                        Revoke
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {admins.length === 0 && <p className="px-5 py-8 text-center text-sm text-[#6b8f88]">No admins configured.</p>}
+          </div>
+        )}
+      </div>
+
+      {/* Grant modal */}
+      {grantOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setGrantOpen(false)} />
+          <div className="relative w-full max-w-md rounded-2xl border border-[#1a3330] bg-[#071A18] p-6 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-base font-semibold text-white">Grant Admin Access</h3>
+              <button onClick={() => setGrantOpen(false)} className="text-[#6b8f88] hover:text-white transition-colors">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <form onSubmit={handleGrant} className="space-y-4">
+              {/* Email lookup */}
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-[#6b8f88]">User Email</label>
+                <div className="flex gap-2">
+                  <input
+                    value={grantEmail} onChange={(e) => { setGrantEmail(e.target.value); setGrantUserId(""); }}
+                    placeholder="user@example.com"
+                    className="flex-1 rounded-lg border border-[#1a3330] bg-[#0D2B27] px-3 py-2 text-sm text-white placeholder:text-[#6b8f88] focus:outline-none focus:ring-1 focus:ring-teal-600"
+                  />
+                  <button type="button" onClick={lookupUser} disabled={lookupBusy}
+                    className="rounded-lg border border-[#1a3330] px-3 py-2 text-xs text-[#6b8f88] hover:text-white hover:border-teal-700 transition-colors disabled:opacity-50">
+                    {lookupBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Look up"}
+                  </button>
+                </div>
+                {grantUserId && <p className="mt-1 text-xs text-teal-400">✓ User found</p>}
+              </div>
+
+              {/* Role */}
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-[#6b8f88]">Role</label>
+                <div className="flex gap-2">
+                  {(["admin", "super_admin"] as const).map((r) => (
+                    <button key={r} type="button" onClick={() => setGrantRole(r)}
+                      className={cn("flex-1 rounded-lg border py-2 text-xs font-medium transition-colors",
+                        grantRole === r ? "border-teal-600 bg-teal-600/20 text-teal-300" : "border-[#1a3330] text-[#6b8f88] hover:text-white")}>
+                      {r === "super_admin" ? "Super Admin" : "Admin"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Privileges */}
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-[#6b8f88]">Privileges</label>
+                <div className="space-y-1.5">
+                  {PRIVILEGE_PRESETS.map(({ key, label, desc }) => (
+                    <label key={key} className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-[#1a3330] bg-[#0D2B27] p-2.5 transition-colors hover:border-teal-700/50">
+                      <input type="checkbox" checked={!!grantPrivs[key]}
+                        onChange={(e) => setGrantPrivs((p) => ({ ...p, [key]: e.target.checked }))}
+                        className="mt-0.5 accent-teal-500" />
+                      <div>
+                        <p className="text-xs font-medium text-white">{label}</p>
+                        <p className="text-[10px] text-[#6b8f88]">{desc}</p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Expiry */}
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-[#6b8f88]">Expires At (optional)</label>
+                <input type="datetime-local" value={grantExpiry} onChange={(e) => setGrantExpiry(e.target.value)}
+                  className="w-full rounded-lg border border-[#1a3330] bg-[#0D2B27] px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-teal-600" />
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-[#6b8f88]">Notes (optional)</label>
+                <input value={grantNotes} onChange={(e) => setGrantNotes(e.target.value)}
+                  placeholder="Reason for granting access…"
+                  className="w-full rounded-lg border border-[#1a3330] bg-[#0D2B27] px-3 py-2 text-sm text-white placeholder:text-[#6b8f88] focus:outline-none focus:ring-1 focus:ring-teal-600" />
+              </div>
+
+              {grantError && <p className="rounded-lg bg-red-900/20 border border-red-800/40 px-3 py-2 text-sm text-red-400">{grantError}</p>}
+
+              <div className="flex gap-2 pt-1">
+                <button type="button" onClick={() => setGrantOpen(false)}
+                  className="flex-1 rounded-lg border border-[#1a3330] py-2 text-sm text-[#6b8f88] hover:text-white transition-colors">
+                  Cancel
+                </button>
+                <button type="submit" disabled={busy || !grantUserId}
+                  className="flex-1 rounded-lg bg-teal-600 py-2 text-sm font-medium text-white hover:bg-teal-700 transition-colors disabled:opacity-50">
+                  {busy ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "Grant Access"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit modal */}
+      {editTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setEditTarget(null)} />
+          <div className="relative w-full max-w-md rounded-2xl border border-[#1a3330] bg-[#071A18] p-6 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-base font-semibold text-white">Edit — {editTarget.email}</h3>
+              <button onClick={() => setEditTarget(null)} className="text-[#6b8f88] hover:text-white transition-colors"><X className="h-5 w-5" /></button>
+            </div>
+            <AdminEditForm entry={editTarget} onSave={handleUpdate} onCancel={() => setEditTarget(null)} busy={busy} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdminEditForm({ entry, onSave, onCancel, busy }: {
+  entry: AdminEntry;
+  onSave: (entry: AdminEntry, updates: Partial<AdminEntry>) => void;
+  onCancel: () => void;
+  busy: boolean;
+}) {
+  const [privs, setPrivs]   = useState<Record<string, boolean>>(entry.privileges ?? {});
+  const [expiry, setExpiry] = useState(entry.expires_at ? entry.expires_at.slice(0, 16) : "");
+  const [notes, setNotes]   = useState(entry.notes ?? "");
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    onSave(entry, {
+      privileges: Object.keys(privs).length > 0 ? privs : null,
+      expires_at: expiry ? new Date(expiry).toISOString() : null,
+      notes: notes || null,
+    });
+  }
+
+  return (
+    <form onSubmit={submit} className="space-y-4">
+      <div>
+        <label className="mb-1.5 block text-xs font-medium text-[#6b8f88]">Privileges</label>
+        <div className="space-y-1.5">
+          {PRIVILEGE_PRESETS.map(({ key, label, desc }) => (
+            <label key={key} className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-[#1a3330] bg-[#0D2B27] p-2.5 transition-colors hover:border-teal-700/50">
+              <input type="checkbox" checked={!!privs[key]}
+                onChange={(e) => setPrivs((p) => ({ ...p, [key]: e.target.checked }))}
+                className="mt-0.5 accent-teal-500" />
+              <div>
+                <p className="text-xs font-medium text-white">{label}</p>
+                <p className="text-[10px] text-[#6b8f88]">{desc}</p>
+              </div>
+            </label>
+          ))}
+        </div>
+      </div>
+      <div>
+        <label className="mb-1.5 block text-xs font-medium text-[#6b8f88]">Expires At</label>
+        <input type="datetime-local" value={expiry} onChange={(e) => setExpiry(e.target.value)}
+          className="w-full rounded-lg border border-[#1a3330] bg-[#0D2B27] px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-teal-600" />
+      </div>
+      <div>
+        <label className="mb-1.5 block text-xs font-medium text-[#6b8f88]">Notes</label>
+        <input value={notes} onChange={(e) => setNotes(e.target.value)}
+          className="w-full rounded-lg border border-[#1a3330] bg-[#0D2B27] px-3 py-2 text-sm text-white placeholder:text-[#6b8f88] focus:outline-none focus:ring-1 focus:ring-teal-600" />
+      </div>
+      <div className="flex gap-2">
+        <button type="button" onClick={onCancel}
+          className="flex-1 rounded-lg border border-[#1a3330] py-2 text-sm text-[#6b8f88] hover:text-white transition-colors">Cancel</button>
+        <button type="submit" disabled={busy}
+          className="flex-1 rounded-lg bg-teal-600 py-2 text-sm font-medium text-white hover:bg-teal-700 transition-colors disabled:opacity-50">
+          {busy ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "Save"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Settings Tab
 // ---------------------------------------------------------------------------
 
@@ -973,6 +1370,8 @@ export default function AdminPage() {
   const router = useRouter();
 
   const [adminEmail, setAdminEmail] = useState("");
+  const [adminUserId, setAdminUserId] = useState("");
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [loading, setLoading]       = useState(true);
   const [stats, setStats]           = useState<Stats | null>(null);
   const [activity, setActivity]     = useState<{ signups: ActivityItem[]; notes: ActivityItem[]; exams: ActivityItem[] } | null>(null);
@@ -985,13 +1384,15 @@ export default function AdminPage() {
     async function init() {
       // Verify admin
       const checkRes = await fetch("/api/admin/check");
-      const checkJson = await checkRes.json() as { data?: { isAdmin: boolean } };
+      const checkJson = await checkRes.json() as { data?: { isAdmin: boolean; role: string | null } };
       if (!checkJson.data?.isAdmin) { router.replace("/dashboard"); return; }
+      setIsSuperAdmin(checkJson.data.role === "super_admin");
 
-      // Get admin email
+      // Get admin email + user id
       const meRes = await fetch("/api/auth/me");
-      const meJson = await meRes.json() as { data?: { user?: { email: string } } };
+      const meJson = await meRes.json() as { data?: { user?: { email: string; id: string } } };
       setAdminEmail(meJson.data?.user?.email ?? "admin");
+      setAdminUserId(meJson.data?.user?.id ?? "");
 
       // Load stats + activity in parallel
       const [statsRes, actRes] = await Promise.all([
@@ -1018,6 +1419,7 @@ export default function AdminPage() {
     { key: "users",         label: "Users",         icon: Users },
     { key: "subscriptions", label: "Subscriptions", icon: CreditCard },
     { key: "activity",      label: "Activity",      icon: Activity },
+    { key: "admins",        label: "Admins",        icon: UserCog },
     { key: "settings",      label: "Settings",      icon: Settings },
   ];
 
@@ -1055,17 +1457,18 @@ export default function AdminPage() {
         {/* Nav */}
         <nav className="flex-1 space-y-1 p-3">
           {NAV.map(({ key, label, icon: Icon }) => (
-            <button
-              key={key}
-              onClick={() => { setActiveTab(key); setSidebarOpen(false); }}
-              className={cn(
-                "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                activeTab === key ? "bg-teal-600/20 text-teal-300" : "text-[#6b8f88] hover:bg-[#1a3330] hover:text-white",
-              )}
-            >
-              <Icon className="h-4 w-4 shrink-0" />
-              {label}
-            </button>
+            <Tooltip key={key} label={label} direction="right">
+              <button
+                onClick={() => { setActiveTab(key); setSidebarOpen(false); }}
+                className={cn(
+                  "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                  activeTab === key ? "bg-teal-600/20 text-teal-300" : "text-[#6b8f88] hover:bg-[#1a3330] hover:text-white",
+                )}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                {label}
+              </button>
+            </Tooltip>
           ))}
         </nav>
 
@@ -1108,6 +1511,7 @@ export default function AdminPage() {
             <SubscriptionsTab stats={stats} />
           )}
           {activeTab === "activity" && <ActivityTab />}
+          {activeTab === "admins" && <AdminsTab currentUserId={adminUserId} isSuperAdmin={isSuperAdmin} />}
           {activeTab === "settings" && <SettingsTab adminEmail={adminEmail} />}
         </main>
       </div>

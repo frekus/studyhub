@@ -131,6 +131,34 @@ function formatShortDate(iso: string) {
 }
 
 // ---------------------------------------------------------------------------
+// Tooltip
+// ---------------------------------------------------------------------------
+
+function Tooltip({ label, direction = "above", children }: {
+  label: string;
+  direction?: "above" | "below" | "right";
+  children: React.ReactNode;
+}) {
+  const pos = {
+    above: "bottom-full left-1/2 -translate-x-1/2 mb-1.5",
+    below: "top-full left-1/2 -translate-x-1/2 mt-1.5",
+    right: "left-full top-1/2 -translate-y-1/2 ml-2",
+  };
+  return (
+    <div className="group/tooltip relative inline-flex">
+      {children}
+      <span className={cn(
+        "pointer-events-none absolute z-50 whitespace-nowrap rounded-md border border-border bg-card px-2 py-1 text-xs text-foreground shadow-sm",
+        "opacity-0 transition-opacity delay-300 group-hover/tooltip:opacity-100",
+        pos[direction],
+      )}>
+        {label}
+      </span>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // FolderIcon helper
 // ---------------------------------------------------------------------------
 
@@ -647,19 +675,25 @@ function NoteCard({ note, flashcardCount, folder, folders, onDelete, onStudy, on
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          <button
-            onClick={() => onMove(note)}
-            className="rounded p-1 text-muted-foreground opacity-0 transition-opacity duration-200 group-hover:opacity-100 hover:text-foreground"
-            aria-label="Move to folder"
-          >
-            <FolderInput className="h-4 w-4" />
-          </button>
-          <button onClick={() => setExpanded((v) => !v)} className="rounded p-1 text-muted-foreground hover:text-foreground" aria-label={expanded ? "Collapse" : "Expand"}>
-            {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-          </button>
-          <button onClick={() => setConfirmOpen(true)} className="rounded p-1 text-muted-foreground opacity-0 transition-opacity duration-200 group-hover:opacity-100 hover:text-destructive" aria-label="Delete note">
-            <Trash2 className="h-4 w-4" />
-          </button>
+          <Tooltip label="Move to folder">
+            <button
+              onClick={() => onMove(note)}
+              className="rounded p-1 text-muted-foreground opacity-0 transition-opacity duration-200 group-hover:opacity-100 hover:text-foreground"
+              aria-label="Move to folder"
+            >
+              <FolderInput className="h-4 w-4" />
+            </button>
+          </Tooltip>
+          <Tooltip label={expanded ? "Collapse" : "Expand"}>
+            <button onClick={() => setExpanded((v) => !v)} className="rounded p-1 text-muted-foreground hover:text-foreground" aria-label={expanded ? "Collapse" : "Expand"}>
+              {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </button>
+          </Tooltip>
+          <Tooltip label="Delete note">
+            <button onClick={() => setConfirmOpen(true)} className="rounded p-1 text-muted-foreground opacity-0 transition-opacity duration-200 group-hover:opacity-100 hover:text-destructive" aria-label="Delete note">
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </Tooltip>
         </div>
       </div>
       {note.ai_summary ? (
@@ -1586,18 +1620,20 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
             <ThemeToggle />
             {/* Notifications bell */}
             <div className="relative" ref={notifRef}>
-              <Button
-                variant="ghost" size="icon"
-                aria-label="Notifications"
-                onClick={() => setNotifOpen((o) => !o)}
-              >
-                <Bell className="h-4 w-4" />
-                {unreadCount > 0 && (
-                  <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-accent-foreground">
-                    {unreadCount > 9 ? "9+" : unreadCount}
-                  </span>
-                )}
-              </Button>
+              <Tooltip label="Notifications" direction="below">
+                <Button
+                  variant="ghost" size="icon"
+                  aria-label="Notifications"
+                  onClick={() => setNotifOpen((o) => !o)}
+                >
+                  <Bell className="h-4 w-4" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-accent-foreground">
+                      {unreadCount > 9 ? "9+" : unreadCount}
+                    </span>
+                  )}
+                </Button>
+              </Tooltip>
               {notifOpen && (
                 <div className="absolute right-0 top-10 z-50 w-80 rounded-xl border border-border bg-card shadow-xl">
                   <div className="flex items-center justify-between border-b border-border px-4 py-3">
@@ -1634,9 +1670,11 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
                 </div>
               )}
             </div>
-            <Button variant="ghost" size="icon" onClick={() => setOnboardingOpen(true)} aria-label="Help">
-              <HelpCircle className="h-4 w-4" />
-            </Button>
+            <Tooltip label="Help" direction="below">
+              <Button variant="ghost" size="icon" onClick={() => setOnboardingOpen(true)} aria-label="Help">
+                <HelpCircle className="h-4 w-4" />
+              </Button>
+            </Tooltip>
             <AvatarDropdown email={user?.email ?? ""} plan={subscription?.tier} />
           </div>
         </div>
