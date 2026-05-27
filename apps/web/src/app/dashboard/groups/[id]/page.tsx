@@ -106,6 +106,7 @@ interface PredictionItem {
 
 interface GroupPrediction {
   id: string;
+  title: string | null;
   status: "pending" | "ready" | "failed";
   papers_count: number;
   members_count: number;
@@ -673,7 +674,7 @@ function GroupNotesTab({ groupId, currentUserId, isOwner }: {
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">{notes.length} collaborative note{notes.length !== 1 ? "s" : ""}</p>
         <Button size="sm" className="w-full sm:w-auto" onClick={() => setCreateOpen(true)}>
-          <PlusCircle className="h-4 w-4" />New Group Note
+          <PlusCircle className="h-4 w-4" /><span className="hidden sm:inline">New </span>Group Note
         </Button>
       </div>
 
@@ -1191,6 +1192,9 @@ function ExamPredictionsTab({ groupId, currentUserId }: { groupId: string; curre
   const [uploadOpen, setUploadOpen] = useState(false);
   const [viewPaper, setViewPaper] = useState<ExamUpload | null>(null);
   const [deletingUpload, setDeletingUpload] = useState<string | null>(null);
+  const [deletingPrediction, setDeletingPrediction] = useState<string | null>(null);
+  const [showNameDialog, setShowNameDialog] = useState(false);
+  const [predictionTitle, setPredictionTitle] = useState("");
   const pollRefs = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
   useEffect(() => {
@@ -1271,18 +1275,49 @@ function ExamPredictionsTab({ groupId, currentUserId }: { groupId: string; curre
     }
   }
 
-  async function handleGenerate() {
+  async function handleDeletePrediction(predictionId: string) {
+    if (!confirm("Delete this prediction batch?")) return;
+    setDeletingPrediction(predictionId);
+    try {
+      const res = await fetch(
+        `/api/groups/${groupId}/predictions/${predictionId}`,
+        { method: "DELETE", credentials: "include" }
+      );
+      if (res.ok) {
+        setPredictions((prev) => prev.filter((p) => p.id !== predictionId));
+        if (activePrediction?.id === predictionId) setActivePrediction(null);
+      }
+    } finally {
+      setDeletingPrediction(null);
+    }
+  }
+
+  function openNameDialog() {
+    if (uploads.length < 2) return;
+    setPredictionTitle(
+      `Batch ${predictions.length + 1} · ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`
+    );
+    setShowNameDialog(true);
+  }
+
+  async function handleGenerate(title?: string) {
+    setShowNameDialog(false);
     setGenerating(true);
     try {
       const res = await fetch(
         `/api/groups/${groupId}/predictions`,
-        { method: "POST", credentials: "include" }
+        {
+          method: "POST", credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: title ?? "" }),
+        }
       );
       const j = await res.json();
-      console.log('[predictions] response:', res.status, j);
+      console.log("[predictions] response:", res.status, j);
       if (res.ok) {
         const newPred: GroupPrediction = {
           id: j.data.predictionId,
+          title: title ?? null,
           status: "pending",
           papers_count: uploads.length,
           members_count: 0,
@@ -1292,12 +1327,12 @@ function ExamPredictionsTab({ groupId, currentUserId }: { groupId: string; curre
         setPredictions((prev) => [newPred, ...prev]);
         startPolling(j.data.predictionId);
       } else {
-        console.error('[predictions] error:', j.error);
-        alert('Error: ' + (j.error ?? 'Unknown error'));
+        console.error("[predictions] error:", j.error);
+        alert("Error: " + (j.error ?? "Unknown error"));
       }
     } catch (e) {
-      console.error('[predictions] fetch failed:', e);
-      alert('Network error - check console');
+      console.error("[predictions] fetch failed:", e);
+      alert("Network error - check console");
     } finally {
       setGenerating(false);
     }
@@ -1388,7 +1423,7 @@ function ExamPredictionsTab({ groupId, currentUserId }: { groupId: string; curre
                     <button
                       onClick={(e) => { e.stopPropagation(); void handleDeleteUpload(u.id); }}
                       disabled={deletingUpload === u.id}
-                      className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive opacity-0 group-hover:opacity-100 sm:opacity-100 disabled:opacity-40"
+                      className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-40"
                       aria-label="Delete paper"
                     >
                       {deletingUpload === u.id
@@ -1422,11 +1457,11 @@ function ExamPredictionsTab({ groupId, currentUserId }: { groupId: string; curre
         )}
       </div>
 
-      {/* Generate button */}
+      {/* Generate button + name dialog */}
       <div>
         <Button
           size="sm"
-          onClick={handleGenerate}
+          onClick={openNameDialog}
           disabled={generating || uploads.length < 2}
           className="w-full sm:w-auto"
         >
@@ -1440,6 +1475,37 @@ function ExamPredictionsTab({ groupId, currentUserId }: { groupId: string; curre
         )}
       </div>
 
+      {/* Name dialog */}
+      {showNameDialog && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4"
+          onClick={() => setShowNameDialog(false)}
+        >
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+          <div
+            className="relative z-10 w-full max-w-sm rounded-2xl border border-border bg-card p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="font-semibold text-base mb-1">Name this prediction</h3>
+            <p className="text-xs text-muted-foreground mb-4">Give this batch a name to find it easily later</p>
+            <input
+              value={predictionTitle}
+              onChange={(e) => setPredictionTitle(e.target.value)}
+              placeholder="e.g. Final Exam Prep · June 2026"
+              className="flex h-10 w-full rounded-md border border-border bg-input px-3 py-2 text-sm mb-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              autoFocus
+              onKeyDown={(e) => { if (e.key === "Enter") void handleGenerate(predictionTitle); }}
+            />
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => setShowNameDialog(false)}>Cancel</Button>
+              <Button className="flex-1" onClick={() => void handleGenerate(predictionTitle)} disabled={generating}>
+                {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <><FlaskConical className="h-4 w-4" />Generate</>}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Prediction history */}
       <div>
         <p className="mb-3 text-sm font-medium">Prediction History</p>
@@ -1449,30 +1515,41 @@ function ExamPredictionsTab({ groupId, currentUserId }: { groupId: string; curre
           </div>
         ) : (
           <div className="space-y-3">
-            {predictions.map((pred) => (
+            {predictions.map((pred, index) => (
               <div key={pred.id} className="rounded-xl border border-border/60 bg-card p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="font-medium text-sm">
-                      {pred.status === "pending" ? "⏳ Generating..." :
-                       pred.status === "failed"  ? "❌ Failed" :
-                       `✅ ${pred.predictions?.length ?? 0} predictions`}
+                      {pred.title || `Batch ${predictions.length - index}`}
+                      {pred.status === "pending" && " ⏳"}
+                      {pred.status === "failed" && " ❌"}
+                      {pred.status === "ready" && ` · ${pred.predictions?.length ?? 0} predictions`}
                     </p>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {pred.papers_count} paper{pred.papers_count !== 1 ? "s" : ""} · {new Date(pred.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                      {pred.papers_count} paper{pred.papers_count !== 1 ? "s" : ""} · {new Date(pred.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
                     </p>
                   </div>
-                  <div className="flex gap-2 shrink-0">
+                  <div className="flex gap-2 shrink-0 items-center">
                     {pred.status === "ready" && (
                       <Button size="sm" variant="outline" onClick={() => setActivePrediction(pred)}>
                         View
                       </Button>
                     )}
                     {pred.status === "failed" && (
-                      <Button size="sm" variant="outline" onClick={handleGenerate}>
+                      <Button size="sm" variant="outline" onClick={openNameDialog}>
                         Retry
                       </Button>
                     )}
+                    <button
+                      onClick={() => void handleDeletePrediction(pred.id)}
+                      disabled={deletingPrediction === pred.id}
+                      className="rounded-lg p-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-40"
+                      title="Delete prediction"
+                    >
+                      {deletingPrediction === pred.id
+                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        : <Trash2 className="h-3.5 w-3.5" />}
+                    </button>
                   </div>
                 </div>
                 {pred.status === "pending" && (
@@ -1493,11 +1570,11 @@ function ExamPredictionsTab({ groupId, currentUserId }: { groupId: string; curre
           <div className="shrink-0 px-6 pt-6 pb-3 border-b border-border">
             <DialogHeader>
               <DialogTitle>
-                Exam Predictions · {activePrediction?.papers_count} paper{activePrediction?.papers_count !== 1 ? "s" : ""}
+                {activePrediction?.title || "Exam Predictions"}
               </DialogTitle>
             </DialogHeader>
             <p className="text-xs text-muted-foreground mt-1">
-              Generated {activePrediction?.created_at
+              {activePrediction?.papers_count} paper{activePrediction?.papers_count !== 1 ? "s" : ""} · Generated {activePrediction?.created_at
                 ? new Date(activePrediction.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
                 : ""}
             </p>

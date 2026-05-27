@@ -60,8 +60,11 @@ export async function POST(request: Request, { params }: { params: Params }) {
   const combinedContent = uploads.map((u, i) => `--- Paper ${i + 1} ---\n${u.content}`).join("\n\n");
   const membersCount = new Set(uploads.map((u) => u.uploaded_by)).size;
 
+  let title: string | null = null;
+  try { const body = await request.json(); title = body?.title || null; } catch { /* no body */ }
+
   const { data: prediction, error } = await admin.from("group_predictions")
-    .insert({ group_id: id, papers_count: uploads.length, members_count: membersCount, status: "pending" })
+    .insert({ group_id: id, papers_count: uploads.length, members_count: membersCount, status: "pending", title })
     .select().single();
 
   if (error) return err(error.message, 500);
