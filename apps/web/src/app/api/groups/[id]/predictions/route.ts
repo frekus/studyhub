@@ -64,7 +64,14 @@ export async function POST(request: Request, { params }: { params: Params }) {
   try { const body = await request.json(); title = body?.title || null; } catch { /* no body */ }
 
   const { data: prediction, error } = await admin.from("group_predictions")
-    .insert({ group_id: id, papers_count: uploads.length, members_count: membersCount, status: "pending", title })
+    .insert({
+      group_id: id,
+      papers_count: uploads.length,
+      members_count: membersCount,
+      status: "pending",
+      title: (title ?? null) as string | null,
+      predictions: null,
+    } as any)
     .select().single();
 
   if (error) return err(error.message, 500);
