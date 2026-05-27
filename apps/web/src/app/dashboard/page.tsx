@@ -26,7 +26,7 @@ import {
   Folder, FolderOpen, Brain, Target, Star, FolderInput,
   Pencil, Check, X as XIcon, Bell,
   Calendar, Clock, RotateCcw, History, ThumbsDown, ThumbsUp,
-  Bot, Home, Paperclip, Sparkles, Send,, Eye} from "lucide-react";
+  Bot, Home, Paperclip, Sparkles, Send, Eye} from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { AvatarDropdown } from "@/components/avatar-dropdown";
 import { cn } from "@/lib/utils";
@@ -2708,11 +2708,11 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
                       >
                         <Upload className="h-4 w-4" />
                         {examFile ? (
-                          <span className="flex items-center gap-2">
-                            <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono uppercase">
+                          <span className="flex min-w-0 items-center gap-1.5">
+                            <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs font-mono uppercase">
                               {examFile.name.split(".").pop()}
                             </span>
-                            <span className="max-w-50 truncate">{examFile.name}</span>
+                            <span className="truncate text-xs max-w-[120px] sm:max-w-[200px]">{examFile.name}</span>
                           </span>
                         ) : "Choose file"}
                         <input
@@ -2727,9 +2727,10 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
                         <button
                           type="button"
                           onClick={() => handleExamFileChange(null)}
-                          className="text-xs text-muted-foreground hover:text-foreground"
+                          title="Remove file"
+                          className="shrink-0 flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
                         >
-                          Remove
+                          <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       )}
                     </div>
