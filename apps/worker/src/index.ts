@@ -605,7 +605,7 @@ async function main(): Promise<void> {
       return;
     }
 
-    const { predictionId, combinedContent } = payload;
+    const { predictionId, combinedContent, papersCount } = payload;
     console.log(`[group-exam] Generating predictions for group prediction ${predictionId}`);
 
     try {
@@ -616,15 +616,15 @@ async function main(): Promise<void> {
           {
             role: "user",
             content:
-              `You are an exam prediction expert. Multiple study group members have uploaded past exam papers. Analyze all papers and predict the most likely questions for the next exam.\n\n` +
-              `Combined past exam papers:\n${combinedContent}\n\n` +
+              `You are an exam prediction expert. Analyze these ${papersCount} past exam papers from a study group and predict the most likely questions.\n\n` +
+              `Combined past papers:\n${combinedContent}\n\n` +
               `Generate exactly 15 predicted questions as a JSON array.\n` +
               `Each item must have:\n` +
-              `- question: string (the predicted exam question)\n` +
-              `- topic: string (topic this question covers)\n` +
-              `- likelihood: string (exactly one of: high, medium, low)\n` +
-              `- explanation: string (why this question is likely to appear, referencing which papers suggest it)\n\n` +
-              `Return ONLY a valid JSON array. No markdown. No explanation. No code blocks.`,
+              `- question: string\n` +
+              `- topic: string\n` +
+              `- likelihood: string (high, medium, or low)\n` +
+              `- explanation: string\n\n` +
+              `Return ONLY valid JSON array. No markdown.`,
           },
         ],
       });

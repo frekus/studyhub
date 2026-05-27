@@ -18,7 +18,7 @@ export async function GET(_request: Request, { params }: { params: Params }) {
   if (!membership) return err("Access denied", 403);
 
   const [{ data: uploads }, { data: prediction }] = await Promise.all([
-    admin.from("group_exam_uploads").select("id, title, uploaded_by, created_at")
+    admin.from("group_exam_uploads").select("id, title, content, uploaded_by, created_at")
       .eq("group_id", id).order("created_at", { ascending: false }),
     admin.from("group_predictions").select("*")
       .eq("group_id", id).order("created_at", { ascending: false }).limit(1).maybeSingle(),

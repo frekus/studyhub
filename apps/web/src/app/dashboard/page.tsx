@@ -1270,7 +1270,17 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
   const [milestoneToast, setMilestoneToast] = useState<string | null>(null);
 
   // Notifications state
-  interface Notification { id: string; type: string; message: string; group_id: string | null; note_id: string | null; created_at: string; }
+  interface Notification {
+    id: string;
+    type: string;
+    message: string;
+    is_read: boolean;
+    group_id: string | null;
+    note_id: string | null;
+    created_at: string;
+    action_url: string;
+    from_user: { full_name: string | null } | null;
+  }
   const [notifications, setNotifications]     = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount]         = useState(0);
   const [notifOpen, setNotifOpen]             = useState(false);
@@ -1544,10 +1554,27 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
     setUnreadCount(0);
   }
 
-  async function markNotificationRead(notifId: string) {
-    await fetch(`/api/notifications/${notifId}/read`, { method: "PATCH" });
-    setNotifications((prev) => prev.filter((n) => n.id !== notifId));
-    setUnreadCount((c) => Math.max(0, c - 1));
+  function formatTimeAgo(dateStr: string): string {
+    const date = new Date(dateStr);
+    const diffMs = Date.now() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    if (diffMins < 1) return "just now";
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
+  }
+
+  async function handleNotificationClick(notif: Notification) {
+    if (!notif.is_read) {
+      await fetch(`/api/notifications/${notif.id}/read`, { method: "PATCH", credentials: "include" });
+      setNotifications((prev) => prev.map((n) => n.id === notif.id ? { ...n, is_read: true } : n));
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+    }
+    setNotifOpen(false);
+    router.push(notif.action_url);
   }
 
   async function recordFlashcardReview() {
@@ -2135,39 +2162,62 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
                 </Button>
               </Tooltip>
               {notifOpen && (
-                <div className="absolute right-0 top-10 z-50 w-80 rounded-xl border border-border bg-card shadow-xl">
-                  <div className="flex items-center justify-between border-b border-border px-4 py-3">
-                    <p className="text-sm font-semibold">Notifications</p>
-                    {unreadCount > 0 && (
-                      <button onClick={markAllNotificationsRead} className="text-xs text-accent hover:underline">
-                        Mark all read
-                      </button>
-                    )}
-                  </div>
-                  <div className="max-h-72 overflow-y-auto divide-y divide-border">
-                    {notifications.length === 0 ? (
-                      <p className="px-4 py-6 text-center text-sm text-muted-foreground">No new notifications</p>
-                    ) : (
-                      notifications.map((n) => (
-                        <div key={n.id} className="flex items-start gap-3 px-4 py-3 hover:bg-muted/50 transition-colors">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm leading-snug">{n.message}</p>
-                            <p className="mt-0.5 text-xs text-muted-foreground">
-                              {new Date(n.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                            </p>
-                          </div>
+                <>
+                  {/* Mobile backdrop — closes dropdown when tapped outside */}
+                  <div
+                    className="fixed inset-0 z-40 sm:hidden"
+                    onClick={() => setNotifOpen(false)}
+                  />
+                  {/* Dropdown panel
+                      Mobile:  fixed, centered, full-width minus 32px gutters
+                      Desktop: absolute, right-anchored to bell icon            */}
+                  <div className={cn(
+                    "z-50 rounded-xl border border-border bg-card",
+                    "shadow-[0_4px_20px_rgba(0,0,0,0.12)]",
+                    // mobile
+                    "fixed top-[60px] left-1/2 w-[calc(100vw-32px)] max-w-[380px] -translate-x-1/2",
+                    // desktop
+                    "sm:absolute sm:top-10 sm:right-0 sm:left-auto sm:w-80 sm:max-w-none sm:translate-x-0",
+                  )}>
+                    <div className="flex items-center justify-between border-b border-border px-4 py-3">
+                      <p className="text-sm font-semibold">Notifications</p>
+                      {unreadCount > 0 && (
+                        <button onClick={markAllNotificationsRead} className="text-xs text-accent hover:underline">
+                          Mark all read
+                        </button>
+                      )}
+                    </div>
+                    <div className="max-h-72 overflow-y-auto divide-y divide-border">
+                      {notifications.length === 0 ? (
+                        <p className="px-4 py-6 text-center text-sm text-muted-foreground">No new notifications</p>
+                      ) : (
+                        notifications.map((n) => (
                           <button
-                            onClick={() => markNotificationRead(n.id)}
-                            className="shrink-0 mt-0.5 text-muted-foreground hover:text-foreground transition-colors"
-                            aria-label="Dismiss"
+                            key={n.id}
+                            onClick={() => handleNotificationClick(n)}
+                            className="w-full text-left flex items-start gap-3 px-4 py-3 hover:bg-muted transition-colors border-b border-border/40 last:border-0"
                           >
-                            <XIcon className="h-3.5 w-3.5" />
+                            <div className="shrink-0 flex h-8 w-8 items-center justify-center rounded-full bg-accent/20 text-accent text-sm font-medium">
+                              {n.from_user?.full_name?.[0]?.toUpperCase() ?? "?"}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className={cn(
+                                "text-sm leading-snug break-words",
+                                !n.is_read ? "font-medium text-foreground" : "text-muted-foreground"
+                              )}>
+                                {n.message}
+                              </p>
+                              <p className="mt-0.5 text-xs text-muted-foreground">{formatTimeAgo(n.created_at)}</p>
+                            </div>
+                            {!n.is_read && (
+                              <div className="shrink-0 mt-1.5 h-2 w-2 rounded-full bg-accent" />
+                            )}
                           </button>
-                        </div>
-                      ))
-                    )}
+                        ))
+                      )}
+                    </div>
                   </div>
-                </div>
+                </>
               )}
             </div>
             <Tooltip label="Help" direction="below">

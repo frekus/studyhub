@@ -15,7 +15,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import {
   ArrowLeft, BookOpen, Users, Copy, Check, Home, LogOut, Share2,
   Loader2, Layers, Download, FileText, Trophy, Play, Square,
-  PlusCircle, Send, Trash2, Smile, Upload, ChevronRight,
+  PlusCircle, Send, Trash2, Smile, Upload, ChevronRight, ChevronDown, ChevronUp,
   FlaskConical, Crown, Wifi, WifiOff, X,
 } from "lucide-react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -118,6 +118,7 @@ interface ExamUpload {
   title: string;
   uploader_name: string;
   created_at: string;
+  content: string;
 }
 
 interface NoteComment {
@@ -203,7 +204,7 @@ function ShareNoteDialog({ groupId, myNotes, members, onShared }: {
   groupId: string;
   myNotes: MyNote[];
   members: Member[];
-  onShared: (noteId: string) => void;
+  onShared: (sharedNote: SharedNote) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [noteId, setNoteId] = useState("");
@@ -221,9 +222,9 @@ function ShareNoteDialog({ groupId, myNotes, members, onShared }: {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ noteId, mentions }),
       });
-      const json = await res.json();
+      const json = await res.json() as { data?: { sharedNote: SharedNote }; error?: string };
       if (!res.ok) { setError(json.error ?? "Failed to share note"); return; }
-      onShared(noteId);
+      if (json.data?.sharedNote) onShared(json.data.sharedNote);
       setNoteId(""); setMentions([]); setOpen(false);
     } catch { setError("Network error. Please try again."); }
     finally { setLoading(false); }
@@ -310,42 +311,69 @@ function ViewNoteModal({ note, groupId, currentUserId, onClose }: {
   useEffect(() => {
     if (!note) return;
     setComments([]);
-    fetch(`/api/groups/${groupId}/notes/${note.note_id}/comments`)
-      .then((r) => r.json())
-      .then((j) => setComments(j.data?.comments ?? []));
 
+    function fetchComments() {
+      fetch(`/api/groups/${groupId}/notes/${note!.note_id}/comments`)
+        .then((r) => r.json())
+        .then((j) => setComments(j.data?.comments ?? []));
+    }
+
+    fetchComments();
+
+    // No filter — filtered realtime subscriptions can fail silently on some plans.
+    // Instead refetch on any note_comments change. Channel name uses Date.now()
+    // to avoid stale subscription collisions when the modal reopens.
     const supabase = getSupabase();
     const channel = supabase
-      .channel(`comments:${note.note_id}`)
-      .on("postgres_changes", {
-        event: "*", schema: "public", table: "note_comments",
-        filter: `note_id=eq.${note.note_id}`,
-      }, () => {
-        fetch(`/api/groups/${groupId}/notes/${note.note_id}/comments`)
-          .then((r) => r.json())
-          .then((j) => setComments(j.data?.comments ?? []));
+      .channel(`comments-${note.note_id}-${Date.now()}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "note_comments" }, () => {
+        fetchComments();
       })
       .subscribe();
+
     return () => { void supabase.removeChannel(channel); };
-  }, [note, groupId]);
+  }, [note?.note_id, groupId]);
 
   async function postComment() {
     if (!note || !newComment.trim()) return;
     setPosting(true);
-    await fetch(`/api/groups/${groupId}/notes/${note.note_id}/comments`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: newComment.trim() }),
-    });
+    const commentText = newComment.trim();
     setNewComment("");
-    setPosting(false);
+
+    const tempId = crypto.randomUUID();
+    const tempComment: NoteComment = {
+      id: tempId, user_id: "", content: commentText, reaction: null,
+      commenter_name: "You", is_own: true, created_at: new Date().toISOString(),
+    };
+    setComments((prev) => [...prev, tempComment]);
+
+    try {
+      const res = await fetch(`/api/groups/${groupId}/notes/${note.note_id}/comments`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: commentText }),
+      });
+      if (!res.ok) {
+        setComments((prev) => prev.filter((c) => c.id !== tempId));
+        setNewComment(commentText);
+      }
+      // Realtime will sync the confirmed row
+    } finally {
+      setPosting(false);
+    }
   }
 
   async function postReaction(emoji: string) {
     if (!note) return;
+    const tempId = crypto.randomUUID();
+    setComments((prev) => [...prev, {
+      id: tempId, user_id: "", content: null, reaction: emoji,
+      commenter_name: "You", is_own: true, created_at: new Date().toISOString(),
+    }]);
     await fetch(`/api/groups/${groupId}/notes/${note.note_id}/comments`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ reaction: emoji }),
     });
+    // Realtime will replace the temp row with the confirmed one
   }
 
   async function deleteComment(commentId: string) {
@@ -448,12 +476,21 @@ function ViewNoteModal({ note, groupId, currentUserId, onClose }: {
 // SharedNoteCard
 // ---------------------------------------------------------------------------
 
-function SharedNoteCard({ note, currentUserId, onView, onStudy }: {
+function SharedNoteCard({ note, currentUserId, onView, onStudy, isHighlighted }: {
   note: SharedNote;
   currentUserId: string | null;
   onView: (note: SharedNote) => void;
   onStudy: (noteId: string, noteTitle: string) => Promise<void>;
+  isHighlighted?: boolean;
 }) {
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (isHighlighted && cardRef.current) {
+      cardRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [isHighlighted]);
+
   const isOwnNote = !!currentUserId && note.shared_by === currentUserId;
   const [importing, setImporting] = useState(false);
   const [importDone, setImportDone] = useState(() => {
@@ -490,7 +527,13 @@ function SharedNoteCard({ note, currentUserId, onView, onStudy }: {
   const dateStr = new Date(note.shared_at).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 
   return (
-    <div className="rounded-xl border border-border/60 bg-card p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md [border-left:4px_solid_hsl(var(--accent))]">
+    <div
+      ref={cardRef}
+      className={cn(
+        "rounded-xl border border-border/60 bg-card p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md [border-left:4px_solid_hsl(var(--accent))]",
+        isHighlighted && "border-accent ring-2 ring-accent/30 animate-pulse-once bg-accent/5"
+      )}
+    >
       <p className="font-semibold leading-snug">{note.title}</p>
       <p className="mt-0.5 text-xs text-muted-foreground">Shared by {note.sharer_name} · {dateStr}</p>
       {summaryPreview ? (
@@ -733,12 +776,14 @@ function LiveSessionTab({ groupId, currentUserId, myNotes }: {
   // Load flashcards when session has a note — with Realtime + polling fallback
   useEffect(() => {
     const noteId = session?.note_id;
-    if (!noteId) { setFlashcards([]); setFlashcardsWaiting(false); return; }
+    const sessionId = session?.id;
+    if (!noteId || !sessionId) { setFlashcards([]); setFlashcardsWaiting(false); return; }
 
     let cancelled = false;
 
     async function fetchFlashcards() {
-      const res = await fetch(`/api/notes/${noteId}/flashcards`);
+      // Use the group session route so non-host members can access the host's note flashcards
+      const res = await fetch(`/api/groups/${groupId}/sessions/${sessionId}/flashcards`);
       const j = await res.json() as { data?: { flashcards: Flashcard[] } };
       const cards: Flashcard[] = j.data?.flashcards ?? [];
       if (cancelled) return;
@@ -1097,6 +1142,7 @@ function ExamPredictionsTab({ groupId }: { groupId: string }) {
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadError, setUploadError] = useState("");
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [viewPaper, setViewPaper] = useState<ExamUpload | null>(null);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -1224,15 +1270,39 @@ function ExamPredictionsTab({ groupId }: { groupId: string }) {
         ) : (
           <div className="space-y-2">
             {uploads.map((u) => (
-              <div key={u.id} className="flex items-center gap-3 rounded-lg border border-border/60 bg-card px-3 py-2.5">
+              <div
+                key={u.id}
+                onClick={() => setViewPaper(u)}
+                className="flex cursor-pointer items-center gap-3 rounded-lg border border-border/60 bg-card px-3 py-2.5 transition-colors hover:border-accent/50 hover:bg-muted/50"
+              >
                 <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <div className="flex-1 min-w-0">
+                <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{u.title}</p>
                   <p className="text-xs text-muted-foreground">by {u.uploader_name} · {new Date(u.created_at).toLocaleDateString()}</p>
                 </div>
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
               </div>
             ))}
           </div>
+        )}
+
+        {/* View paper content modal */}
+        {viewPaper && (
+          <Dialog open={!!viewPaper} onOpenChange={(o) => { if (!o) setViewPaper(null); }}>
+            <DialogContent className="flex max-h-[90vh] flex-col p-0">
+              <div className="shrink-0 border-b border-border px-6 pb-3 pt-6">
+                <DialogHeader>
+                  <DialogTitle>{viewPaper.title}</DialogTitle>
+                </DialogHeader>
+                <p className="mt-1 text-xs text-muted-foreground">Uploaded by {viewPaper.uploader_name}</p>
+              </div>
+              <div className="flex-1 overflow-y-auto px-6 py-4" style={{ WebkitOverflowScrolling: "touch" }}>
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
+                  {viewPaper.content || "No content available"}
+                </p>
+              </div>
+            </DialogContent>
+          </Dialog>
         )}
       </div>
 
@@ -1302,6 +1372,8 @@ export default function GroupDetailPage() {
   const [activeTab, setActiveTab]     = useState<Tab>("shared");
   const [viewNote, setViewNote]       = useState<SharedNote | null>(null);
   const [noCardsToast, setNoCardsToast] = useState("");
+  const [membersExpanded, setMembersExpanded] = useState(false);
+  const [highlightedNoteId, setHighlightedNoteId] = useState<string | null>(null);
 
   // Full-screen flashcard study mode
   const [studyMode, setStudyMode]             = useState(false);
@@ -1347,6 +1419,44 @@ export default function GroupDetailPage() {
     load();
   }, [id, router]);
 
+  // Handle URL params: ?tab=... and ?highlight=...
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tabParam = params.get("tab");
+    const highlightId = params.get("highlight");
+
+    if (tabParam) {
+      const validTabs: Tab[] = ["shared", "group-notes", "live", "leaderboard", "exam"];
+      if (validTabs.includes(tabParam as Tab)) {
+        setActiveTab(tabParam as Tab);
+      }
+    }
+
+    if (highlightId) {
+      setHighlightedNoteId(highlightId);
+      setTimeout(() => setHighlightedNoteId(null), 3000);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Realtime: when any member shares a note, all members see it immediately
+  useEffect(() => {
+    if (!currentUserId) return;
+    const supabase = getSupabase();
+    const channel = supabase
+      .channel(`shared-notes-${id}`)
+      .on("postgres_changes", {
+        event: "INSERT", schema: "public", table: "study_group_notes",
+        filter: `group_id=eq.${id}`,
+      }, async () => {
+        const res = await fetch(`/api/groups/${id}/notes`);
+        const j = await res.json() as { data?: { notes: SharedNote[] } };
+        if (res.ok) setSharedNotes(Array.isArray(j.data?.notes) ? j.data.notes : []);
+      })
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [id, currentUserId]);
+
   async function handleLogout() {
     setLoggingOut(true);
     try { await fetch("/api/auth/logout", { method: "POST", credentials: "include" }); }
@@ -1354,14 +1464,8 @@ export default function GroupDetailPage() {
     finally { window.location.href = "/"; }
   }
 
-  function handleNoteShared(noteId: string) {
-    const note = myNotes.find((n) => n.id === noteId);
-    if (!note) return;
-    setSharedNotes((prev) => [{
-      id: crypto.randomUUID(), note_id: noteId, group_id: id,
-      shared_at: new Date().toISOString(), shared_by: currentUserId ?? "",
-      sharer_name: currentUserName, title: note.title, content: "", ai_summary: null,
-    }, ...prev]);
+  function handleNoteShared(sharedNote: SharedNote) {
+    setSharedNotes((prev) => [sharedNote, ...prev]);
   }
 
   async function handleLeave() {
@@ -1538,15 +1642,29 @@ export default function GroupDetailPage() {
         {/* Members sidebar + content grid */}
         <div className="grid gap-8 lg:grid-cols-4">
           <aside className="lg:col-span-1">
-            <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Members</h2>
+            <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Members ({members.length})
+            </h2>
             <div className="flex flex-wrap gap-2">
-              {members.map((m) => (
+              {(membersExpanded ? members : members.slice(0, 2)).map((m) => (
                 <div key={m.id} className="flex min-w-0 max-w-[140px] items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5">
                   <span className="truncate text-sm">{m.users?.full_name ?? `User ${m.user_id.slice(0, 8)}`}</span>
                   {m.role === "owner" && <Crown className="h-3 w-3 shrink-0 text-yellow-400" />}
                 </div>
               ))}
             </div>
+            {members.length > 2 && (
+              <button
+                onClick={() => setMembersExpanded((v) => !v)}
+                className="mt-2 flex items-center gap-1 text-xs text-accent transition-colors hover:underline"
+              >
+                {membersExpanded ? (
+                  <><ChevronUp className="h-3 w-3" />Show less</>
+                ) : (
+                  <><ChevronDown className="h-3 w-3" />+{members.length - 2} more member{members.length - 2 !== 1 ? "s" : ""}</>
+                )}
+              </button>
+            )}
           </aside>
 
           <section className="lg:col-span-3">
@@ -1588,6 +1706,7 @@ export default function GroupDetailPage() {
                     <SharedNoteCard
                       key={sn.id} note={sn} currentUserId={currentUserId}
                       onView={setViewNote} onStudy={openStudyMode}
+                      isHighlighted={highlightedNoteId === sn.note_id}
                     />
                   ))}
                 </div>

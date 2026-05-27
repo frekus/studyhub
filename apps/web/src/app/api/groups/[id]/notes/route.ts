@@ -49,21 +49,40 @@ export async function POST(request: Request, { params }: { params: Params }) {
 
   if (!note) return err("Note not found", 404);
 
-  const { error } = await admin
+  const { data: inserted, error } = await admin
     .from("study_group_notes")
-    .insert({ group_id: id, note_id: parsed.data.noteId, shared_by: user.id });
+    .insert({ group_id: id, note_id: parsed.data.noteId, shared_by: user.id })
+    .select("id")
+    .single();
 
   if (error && error.code !== "23505") return err(error.message, 500);
+
+  // Fetch full shared note data to return to the client
+  const rowId = inserted?.id;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: fullRow } = rowId ? await (admin as any)
+    .from("study_group_notes")
+    .select("id, note_id, group_id, shared_at, shared_by, study_notes!inner(title, content, ai_summary), users!shared_by(full_name)")
+    .eq("id", rowId)
+    .single() : { data: null };
+
+  const sharedNote = fullRow ? {
+    id:          fullRow.id,
+    note_id:     fullRow.note_id,
+    group_id:    fullRow.group_id,
+    shared_at:   fullRow.shared_at,
+    shared_by:   fullRow.shared_by,
+    sharer_name: fullRow.users?.full_name ?? "Unknown",
+    title:       fullRow.study_notes?.title ?? "",
+    content:     fullRow.study_notes?.content ?? "",
+    ai_summary:  fullRow.study_notes?.ai_summary ?? null,
+  } : null;
 
   // Create mention notifications
   const mentions = parsed.data.mentions ?? [];
   if (mentions.length > 0) {
-    const { data: noteData } = await admin
-      .from("study_notes").select("title").eq("id", parsed.data.noteId).maybeSingle();
-    const { data: sharer } = await admin
-      .from("users").select("full_name").eq("id", user.id).maybeSingle();
-    const sharerName = sharer?.full_name ?? "Someone";
-    const noteTitle  = noteData?.title ?? "a note";
+    const sharerName = fullRow?.users?.full_name ?? "Someone";
+    const noteTitle  = fullRow?.study_notes?.title ?? "a note";
 
     await admin.from("group_notifications").insert(
       mentions.map((mentionedUserId) => ({
@@ -77,7 +96,7 @@ export async function POST(request: Request, { params }: { params: Params }) {
     );
   }
 
-  return ok({ success: true });
+  return ok({ sharedNote }, 201);
 }
 
 export async function GET(_request: Request, { params }: { params: Params }) {
