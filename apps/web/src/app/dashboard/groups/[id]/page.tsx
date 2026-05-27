@@ -671,11 +671,10 @@ function GroupNotesTab({ groupId, currentUserId, isOwner }: {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-sm text-muted-foreground">{notes.length} collaborative note{notes.length !== 1 ? "s" : ""}</p>
-        <Button size="sm" onClick={() => setCreateOpen(true)} className="shrink-0" title="New Group Note">
+      <div className="flex justify-center mb-3">
+        <Button size="sm" onClick={() => setCreateOpen(true)} className="gap-2">
           <PlusCircle className="h-4 w-4" />
-          <span className="hidden sm:inline ml-1.5">New Group Note</span>
+          Group Note
         </Button>
       </div>
 
