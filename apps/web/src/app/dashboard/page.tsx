@@ -783,7 +783,7 @@ function NoteCard({ note, flashcardCount, folder, folders, onDelete, onStudy, on
             </button>
           </Tooltip>
           <Tooltip label="Delete note">
-            <button onClick={() => setConfirmOpen(true)} className="rounded p-1 text-muted-foreground transition-opacity duration-200 sm:opacity-0 sm:group-hover:opacity-100 hover:text-destructive" aria-label="Delete note">
+            <button onClick={() => setConfirmOpen(true)} className="rounded p-1 text-muted-foreground transition-colors hover:text-destructive" aria-label="Delete note" title="Delete note">
               <Trash2 className="h-4 w-4" />
             </button>
           </Tooltip>
