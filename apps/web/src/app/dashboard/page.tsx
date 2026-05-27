@@ -2447,6 +2447,7 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
                   </Button>
                   <CreateGroupDialog onCreated={handleGroupCreated} onLimitReached={showUpgradeModal} />
                 </div>
+              </div>
             </div>
             {groups.length === 0 ? (
               <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-16 text-center">
