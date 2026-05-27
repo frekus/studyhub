@@ -1980,7 +1980,44 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
     } finally { setCancellingSub(false); }
   }
 
-  if (loading) return <div className="flex min-h-screen items-center justify-center bg-background"><p className="text-muted-foreground">Loading…</p></div>;
+  if (loading) return (
+    <div className="min-h-screen bg-background">
+      {/* Header skeleton */}
+      <div className="sticky top-0 z-40 border-b border-border bg-background px-4 py-3">
+        <div className="mx-auto flex max-w-5xl items-center justify-between">
+          <div className="h-6 w-28 rounded-md bg-muted animate-pulse" />
+          <div className="flex gap-2">
+            <div className="h-8 w-8 rounded-full bg-muted animate-pulse" />
+            <div className="h-8 w-8 rounded-full bg-muted animate-pulse" />
+            <div className="h-8 w-8 rounded-full bg-muted animate-pulse" />
+          </div>
+        </div>
+      </div>
+
+      <div className="mx-auto max-w-5xl px-4 py-6">
+        {/* Streak widget skeleton */}
+        <div className="mb-4 h-16 rounded-xl bg-muted animate-pulse" />
+
+        {/* Tab bar skeleton */}
+        <div className="mb-6 flex gap-4 border-b border-border pb-0">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="mb-2 h-8 w-16 rounded-md bg-muted animate-pulse" />
+          ))}
+        </div>
+
+        {/* Note cards skeleton */}
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="rounded-xl border border-border bg-card p-4 space-y-2">
+              <div className="h-4 w-3/4 rounded bg-muted animate-pulse" />
+              <div className="h-3 w-1/2 rounded bg-muted animate-pulse" />
+              <div className="mt-2 h-10 w-full rounded-lg bg-muted animate-pulse" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
   if (error)   return <div className="flex min-h-screen items-center justify-center bg-background"><p className="text-destructive">{error}</p></div>;
 
   // ── Full-screen flashcard study mode ──────────────────────────────────────
