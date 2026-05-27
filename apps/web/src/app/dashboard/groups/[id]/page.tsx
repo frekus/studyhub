@@ -116,9 +116,11 @@ interface GroupPrediction {
 interface ExamUpload {
   id: string;
   title: string;
-  uploader_name: string;
-  created_at: string;
   content: string;
+  uploader_name: string;
+  uploaded_by: string;
+  created_at: string;
+  is_own?: boolean;
 }
 
 interface NoteComment {
@@ -1132,7 +1134,7 @@ function LeaderboardTab({ groupId, currentUserId }: { groupId: string; currentUs
 // ExamPredictionsTab
 // ---------------------------------------------------------------------------
 
-function ExamPredictionsTab({ groupId }: { groupId: string }) {
+function ExamPredictionsTab({ groupId, currentUserId }: { groupId: string; currentUserId: string | null }) {
   const [uploads, setUploads] = useState<ExamUpload[]>([]);
   const [prediction, setPrediction] = useState<GroupPrediction | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1143,14 +1145,20 @@ function ExamPredictionsTab({ groupId }: { groupId: string }) {
   const [uploadError, setUploadError] = useState("");
   const [uploadOpen, setUploadOpen] = useState(false);
   const [viewPaper, setViewPaper] = useState<ExamUpload | null>(null);
+  const [deletingUpload, setDeletingUpload] = useState<string | null>(null);
+  const [showUploadNotice, setShowUploadNotice] = useState(false);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     fetch(`/api/groups/${groupId}/predictions`)
       .then((r) => r.json())
-      .then((j) => { setUploads(j.data?.uploads ?? []); setPrediction(j.data?.prediction ?? null); })
+      .then((j) => {
+        const raw: ExamUpload[] = j.data?.uploads ?? [];
+        setUploads(raw.map((u) => ({ ...u, is_own: u.uploaded_by === currentUserId })));
+        setPrediction(j.data?.prediction ?? null);
+      })
       .finally(() => setLoading(false));
-  }, [groupId]);
+  }, [groupId, currentUserId]);
 
   useEffect(() => {
     if (prediction?.status === "pending") {
@@ -1183,7 +1191,7 @@ function ExamPredictionsTab({ groupId }: { groupId: string }) {
       clearTimeout(timer);
       const j = await res.json();
       if (!res.ok) { setUploadError(j.error ?? "Upload failed. Please try again."); return; }
-      setUploads((prev) => [j.data.upload, ...prev]);
+      setUploads((prev) => [{ ...j.data.upload, is_own: true }, ...prev]);
       setUploadTitle(""); setUploadFile(null); setUploadOpen(false);
     } catch (error) {
       clearTimeout(timer);
@@ -1194,7 +1202,21 @@ function ExamPredictionsTab({ groupId }: { groupId: string }) {
     }
   }
 
+  async function handleDeleteUpload(uploadId: string) {
+    if (!confirm("Delete this exam paper?")) return;
+    setDeletingUpload(uploadId);
+    try {
+      const res = await fetch(`/api/groups/${groupId}/exam-uploads/${uploadId}`, {
+        method: "DELETE", credentials: "include",
+      });
+      if (res.ok) setUploads((prev) => prev.filter((u) => u.id !== uploadId));
+    } finally {
+      setDeletingUpload(null);
+    }
+  }
+
   async function handleGenerate() {
+    if (uploads.length < 2) { setShowUploadNotice(true); return; }
     setGenerating(true);
     const res = await fetch(`/api/groups/${groupId}/predictions`, { method: "POST" });
     const j = await res.json();
@@ -1272,15 +1294,33 @@ function ExamPredictionsTab({ groupId }: { groupId: string }) {
             {uploads.map((u) => (
               <div
                 key={u.id}
-                onClick={() => setViewPaper(u)}
-                className="flex cursor-pointer items-center gap-3 rounded-lg border border-border/60 bg-card px-3 py-2.5 transition-colors hover:border-accent/50 hover:bg-muted/50"
+                className="group flex items-center gap-3 rounded-lg border border-border/60 bg-card px-3 py-2.5 transition-colors hover:border-accent/50 hover:bg-muted/50"
               >
                 <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0 flex-1 cursor-pointer" onClick={() => setViewPaper(u)}>
                   <p className="truncate text-sm font-medium">{u.title}</p>
-                  <p className="text-xs text-muted-foreground">by {u.uploader_name} · {new Date(u.created_at).toLocaleDateString()}</p>
+                  <p className="text-xs text-muted-foreground">
+                    by {u.uploader_name} · {new Date(u.created_at).toLocaleDateString()}
+                  </p>
                 </div>
-                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <div className="flex shrink-0 items-center gap-1">
+                  <ChevronRight
+                    className="h-4 w-4 cursor-pointer text-muted-foreground"
+                    onClick={() => setViewPaper(u)}
+                  />
+                  {u.is_own && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); void handleDeleteUpload(u.id); }}
+                      disabled={deletingUpload === u.id}
+                      className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive opacity-0 group-hover:opacity-100 sm:opacity-100 disabled:opacity-40"
+                      aria-label="Delete paper"
+                    >
+                      {deletingUpload === u.id
+                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        : <Trash2 className="h-3.5 w-3.5" />}
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -1310,16 +1350,47 @@ function ExamPredictionsTab({ groupId }: { groupId: string }) {
       <div>
         <div className="flex flex-col gap-2 mb-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm font-medium">AI Predictions</p>
-          {uploads.length >= 2 && !prediction?.status.match(/pending|ready/) && (
+          {!prediction?.status.match(/pending|ready/) && (
             <Button size="sm" className="w-full sm:w-auto" onClick={handleGenerate} disabled={generating}>
               <FlaskConical className="h-4 w-4" />{generating ? "Generating…" : "Generate Predictions"}
             </Button>
           )}
         </div>
 
+        {/* Not-enough-papers notice popup */}
+        {showUploadNotice && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center px-4"
+            onClick={() => setShowUploadNotice(false)}
+          >
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+            <div
+              className="relative z-10 w-full max-w-sm rounded-2xl border border-border bg-card p-6 text-center shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="mb-3 text-4xl">📚</div>
+              <h3 className="mb-2 text-base font-semibold">Not enough papers yet</h3>
+              <p className="mb-5 text-sm leading-relaxed text-muted-foreground">
+                You need to upload 2+ exam papers to get predictions 🙂
+                <span className="mt-1 block text-xs">
+                  Currently uploaded: {uploads.length} paper{uploads.length !== 1 ? "s" : ""}
+                </span>
+              </p>
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => setShowUploadNotice(false)}>
+                  Got it
+                </Button>
+                <Button className="flex-1" onClick={() => { setShowUploadNotice(false); setUploadOpen(true); }}>
+                  <Upload className="h-4 w-4" />Upload Paper
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {!prediction ? (
           <div className="rounded-lg border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
-            {uploads.length < 2 ? "Upload at least 2 exam papers to generate predictions" : "Click Generate Predictions to analyze all uploaded papers"}
+            Click Generate Predictions to analyze all uploaded papers
           </div>
         ) : prediction.status === "pending" ? (
           <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-4">
@@ -1726,7 +1797,7 @@ export default function GroupDetailPage() {
             )}
 
             {activeTab === "exam" && (
-              <ExamPredictionsTab groupId={id} />
+              <ExamPredictionsTab groupId={id} currentUserId={currentUserId} />
             )}
           </section>
         </div>

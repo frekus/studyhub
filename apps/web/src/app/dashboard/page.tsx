@@ -697,7 +697,7 @@ function UpgradeModal({ open, message, onClose }: { open: boolean; message: stri
 // NoteCard
 // ---------------------------------------------------------------------------
 
-function NoteCard({ note, flashcardCount, folder, folders, onDelete, onStudy, onMove, onHistory, onGenerateMore }: {
+function NoteCard({ note, flashcardCount, folder, folders, onDelete, onStudy, onMove, onHistory, onEdit, onGenerateMore }: {
   note: Note;
   flashcardCount: number | undefined;
   folder?: Folder;
@@ -706,6 +706,7 @@ function NoteCard({ note, flashcardCount, folder, folders, onDelete, onStudy, on
   onStudy: (noteId: string, noteTitle: string) => void;
   onMove: (note: Note) => void;
   onHistory: (note: Note) => void;
+  onEdit: (note: Note) => void;
   onGenerateMore?: (noteId: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -749,6 +750,15 @@ function NoteCard({ note, flashcardCount, folder, folders, onDelete, onStudy, on
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          <Tooltip label="Edit note">
+            <button
+              onClick={() => onEdit(note)}
+              className="rounded p-1 text-muted-foreground opacity-0 transition-opacity duration-200 group-hover:opacity-100 hover:text-foreground"
+              aria-label="Edit note"
+            >
+              <Pencil className="h-4 w-4" />
+            </button>
+          </Tooltip>
           <Tooltip label="Version history">
             <button
               onClick={() => onHistory(note)}
@@ -1264,6 +1274,14 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
   const [aiConversations, setAiConversations]     = useState<AiConversation[]>([]);
   const [prefilledQuestion, setPrefilledQuestion] = useState<string | null>(null);
   const [generatingMore, setGeneratingMore]       = useState(false);
+
+  // Edit note state
+  const [editNote, setEditNote]               = useState<Note | null>(null);
+  const [editTitle, setEditTitle]             = useState("");
+  const [editContent, setEditContent]         = useState("");
+  const [editFolderId, setEditFolderId]       = useState<string | null>(null);
+  const [saving, setSaving]                   = useState(false);
+  const [editExtracting, setEditExtracting]   = useState(false);
 
   // Streak state
   const [streak, setStreak]             = useState<StreakData | null>(null);
@@ -1782,6 +1800,61 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
         }
       } catch { /* ignore */ }
     }, 3000);
+  }
+
+  function openEditNote(note: Note) {
+    setEditNote(note);
+    setEditTitle(note.title);
+    setEditContent(note.content ?? "");
+    setEditFolderId(note.folder_id ?? null);
+  }
+
+  async function handleSaveEdit() {
+    if (!editNote || !editTitle.trim()) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/notes/${editNote.id}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title:     editTitle.trim(),
+          content:   editContent.trim() || null,
+          folder_id: editFolderId,
+        }),
+      });
+      if (res.ok) {
+        setNotes((prev) => prev.map((n) =>
+          n.id === editNote.id
+            ? { ...n, title: editTitle.trim(), content: editContent.trim() || n.content, folder_id: editFolderId, ai_summary: null } as Note
+            : n
+        ));
+        setEditNote(null);
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleEditFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setEditExtracting(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/notes/extract-file", {
+        method: "POST", credentials: "include", body: formData,
+      });
+      const json = await res.json() as { data?: { content: string } };
+      if (res.ok && json.data?.content) {
+        setEditContent((prev) => prev ? prev + "\n\n" + json.data!.content : json.data!.content);
+      }
+    } catch { /* silently ignore extraction errors */ }
+    finally {
+      setEditExtracting(false);
+      e.target.value = "";
+    }
   }
 
   async function openVersionHistory(note: Note) {
@@ -2326,6 +2399,69 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
               onClose={() => setMoveNoteTarget(null)}
             />
 
+            {/* Edit note modal */}
+            <Dialog open={!!editNote} onOpenChange={(o) => { if (!o) setEditNote(null); }}>
+              <DialogContent className="flex max-h-[90vh] flex-col p-0">
+                <div className="shrink-0 border-b border-border px-6 pb-3 pt-6">
+                  <DialogHeader><DialogTitle>Edit Note</DialogTitle></DialogHeader>
+                </div>
+                <div className="flex-1 space-y-4 overflow-y-auto px-6 py-4" style={{ WebkitOverflowScrolling: "touch" }}>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium">Title</label>
+                    <input
+                      value={editTitle}
+                      onChange={(e) => setEditTitle(e.target.value)}
+                      placeholder="Note title"
+                      className="flex h-10 w-full rounded-md border border-border bg-input px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm font-medium">Content</label>
+                      <label className="flex cursor-pointer items-center gap-1.5 text-xs text-accent hover:underline">
+                        <Paperclip className="h-3.5 w-3.5" />
+                        {editExtracting ? "Extracting…" : "Upload document"}
+                        <input type="file" className="hidden" accept=".txt,.pdf,.png,.jpg,.jpeg" onChange={handleEditFileUpload} />
+                      </label>
+                    </div>
+                    <textarea
+                      value={editContent}
+                      onChange={(e) => setEditContent(e.target.value)}
+                      placeholder="Note content…"
+                      rows={8}
+                      className="flex w-full resize-none rounded-md border border-border bg-input px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    />
+                  </div>
+                  {folders.length > 0 && (
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium">Folder (optional)</label>
+                      <select
+                        value={editFolderId ?? ""}
+                        onChange={(e) => setEditFolderId(e.target.value || null)}
+                        className="flex h-10 w-full rounded-md border border-border bg-input px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <option value="">No folder</option>
+                        {folders.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+                      </select>
+                    </div>
+                  )}
+                  {editNote?.ai_summary && (
+                    <div className="rounded-lg border border-accent/30 bg-accent/5 px-4 py-3">
+                      <p className="mb-1 text-xs font-medium text-accent">Current AI Summary</p>
+                      <p className="text-xs leading-relaxed text-muted-foreground">{editNote.ai_summary.slice(0, 150)}…</p>
+                      <p className="mt-1 text-xs italic text-muted-foreground">Summary will regenerate after saving</p>
+                    </div>
+                  )}
+                </div>
+                <div className="flex shrink-0 justify-end gap-2 border-t border-border px-6 py-4">
+                  <Button variant="outline" onClick={() => setEditNote(null)} disabled={saving}>Cancel</Button>
+                  <Button onClick={handleSaveEdit} disabled={saving || !editTitle.trim()}>
+                    {saving ? <><Loader2 className="mr-1 h-4 w-4 animate-spin" />Saving…</> : "Save Changes"}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+
             {/* Subscription status card for paid users */}
             {subscription && subscription.tier !== "free" && (
               <div className="mb-6 flex items-center justify-between rounded-lg border border-orange-500/30 bg-orange-500/5 px-4 py-3">
@@ -2458,6 +2594,7 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
                           onStudy={openStudyMode}
                           onMove={setMoveNoteTarget}
                           onHistory={openVersionHistory}
+                          onEdit={openEditNote}
                           onGenerateMore={handleGenerateMoreForNote}
                         />
                       ))}

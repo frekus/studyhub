@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createClient, requireUser } from "@/lib/supabase/server";
 import { ok, err, validationErr } from "@/lib/response";
 import { cacheKeys, tryGet, trySet, tryDel, NOTE_TTL } from "@/lib/cache";
+import { tryPublishNoteSummarize } from "@/lib/queue";
 import type { StudyNoteRow } from "@studyhub/database";
 
 const UpdateNoteSchema = z
@@ -136,6 +137,16 @@ export async function PATCH(request: Request, { params }: { params: Params }) {
     cacheKeys.noteSingle(user.id, id),
     cacheKeys.notesList(user.id),
   );
+
+  // Re-queue summarisation whenever title or content changes
+  if (parsed.data.title !== undefined || parsed.data.content !== undefined) {
+    void tryPublishNoteSummarize({
+      noteId: id,
+      userId: user.id,
+      title:   note.title,
+      content: note.content ?? "",
+    });
+  }
 
   return ok({ note });
 }
