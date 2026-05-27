@@ -71,7 +71,7 @@ RUN pnpm --filter @studyhub/database build && \
 # 8. Build the Next.js app.
 #    NEXT_TELEMETRY_DISABLED prevents network calls during build.
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN pnpm --filter @studyhub/web build
+RUN NODE_OPTIONS="--max-old-space-size=1536" pnpm --filter @studyhub/web build
 
 # ---- Runner: minimal production image ----
 FROM node:22-alpine AS runner
