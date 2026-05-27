@@ -16,7 +16,7 @@ import {
   ArrowLeft, BookOpen, Users, Copy, Check, Home, LogOut, Share2,
   Loader2, Layers, Download, FileText, Trophy, Play, Square,
   PlusCircle, Send, Trash2, Smile, Upload, ChevronRight, ChevronDown, ChevronUp,
-  FlaskConical, Crown, Wifi, WifiOff, X,
+  FlaskConical, Crown, Wifi, WifiOff, X, Settings,
 } from "lucide-react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { cn } from "@/lib/utils";
@@ -606,6 +606,7 @@ function GroupNotesTab({ groupId, currentUserId, isOwner }: {
   const [editNote, setEditNote] = useState<GroupNote | null>(null);
   const [editContent, setEditContent] = useState("");
   const [saving, setSaving] = useState(false);
+  const [deleteNoteConfirm, setDeleteNoteConfirm] = useState<string | null>(null);
 
   useEffect(() => {
     fetch(`/api/groups/${groupId}/group-notes`)
@@ -624,8 +625,23 @@ function GroupNotesTab({ groupId, currentUserId, isOwner }: {
     });
     const j = await res.json();
     if (res.ok) {
-      setNotes((prev) => [j.data.note, ...prev]);
+      const newNote: GroupNote = j.data.note;
+      setNotes((prev) => [newNote, ...prev]);
       setTitle(""); setContent(""); setCreateOpen(false);
+
+      // Poll for AI summary (generated async by worker)
+      if (!newNote.ai_summary) {
+        const pollId = setInterval(async () => {
+          const r = await fetch(`/api/groups/${groupId}/group-notes/${newNote.id}`);
+          const pj = await r.json() as { data?: { note: GroupNote } };
+          const updated = pj.data?.note;
+          if (updated?.ai_summary) {
+            setNotes((prev) => prev.map((n) => n.id === newNote.id ? updated : n));
+            clearInterval(pollId);
+          }
+        }, 3000);
+        setTimeout(() => clearInterval(pollId), 60000);
+      }
     }
     setCreating(false);
   }
@@ -701,6 +717,16 @@ function GroupNotesTab({ groupId, currentUserId, isOwner }: {
         </Dialog>
       )}
 
+      <ConfirmDialog
+        open={!!deleteNoteConfirm}
+        title="Delete this note?"
+        description="This will permanently delete this group note and cannot be undone."
+        confirmLabel="Delete"
+        onConfirm={() => { if (deleteNoteConfirm) { void handleDelete(deleteNoteConfirm); } setDeleteNoteConfirm(null); }}
+        onCancel={() => setDeleteNoteConfirm(null)}
+        loading={false}
+      />
+
       {notes.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-12 text-center">
           <BookOpen className="mb-3 h-8 w-8 text-muted-foreground" />
@@ -717,18 +743,36 @@ function GroupNotesTab({ groupId, currentUserId, isOwner }: {
                   <p className="mt-0.5 text-xs text-muted-foreground">by {n.creator_name} · edited by {n.editor_name}</p>
                 </div>
                 <div className="flex gap-1.5 shrink-0">
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditNote(n); setEditContent(n.content ?? ""); }}>
+                  <button
+                    title="Edit note"
+                    onClick={() => { setEditNote(n); setEditContent(n.content ?? ""); }}
+                    className="relative group/tt rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                  >
                     <FileText className="h-3.5 w-3.5" />
-                  </Button>
+                    <span className="absolute -top-8 left-1/2 -translate-x-1/2 hidden group-hover/tt:block bg-foreground text-background text-xs px-2 py-1 rounded whitespace-nowrap z-50 pointer-events-none">
+                      Edit note
+                    </span>
+                  </button>
                   {(n.created_by === currentUserId || isOwner) && (
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDelete(n.id)}>
+                    <button
+                      title="Delete note"
+                      onClick={() => setDeleteNoteConfirm(n.id)}
+                      className="relative group/tt rounded-lg p-1.5 text-destructive hover:bg-destructive/10 transition-colors"
+                    >
                       <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                      <span className="absolute -top-8 left-1/2 -translate-x-1/2 hidden group-hover/tt:block bg-foreground text-background text-xs px-2 py-1 rounded whitespace-nowrap z-50 pointer-events-none">
+                        Delete note
+                      </span>
+                    </button>
                   )}
                 </div>
               </div>
-              {n.ai_summary && (
+              {n.ai_summary ? (
                 <p className="mt-2 rounded-md bg-accent/10 px-3 py-1.5 text-sm text-accent">{n.ai_summary}</p>
+              ) : (
+                <p className="mt-2 flex items-center gap-1.5 text-xs italic text-muted-foreground">
+                  <Loader2 className="h-3 w-3 animate-spin" />Generating AI summary…
+                </p>
               )}
               {n.content && (
                 <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{n.content}</p>
@@ -1445,6 +1489,11 @@ export default function GroupDetailPage() {
   const [noCardsToast, setNoCardsToast] = useState("");
   const [membersExpanded, setMembersExpanded] = useState(false);
   const [highlightedNoteId, setHighlightedNoteId] = useState<string | null>(null);
+  const [showGroupSettings, setShowGroupSettings] = useState(false);
+  const [newGroupName, setNewGroupName] = useState("");
+  const [renamingGroup, setRenamingGroup] = useState(false);
+  const [deleteGroupConfirm, setDeleteGroupConfirm] = useState(false);
+  const [deletingGroup, setDeletingGroup] = useState(false);
 
   // Full-screen flashcard study mode
   const [studyMode, setStudyMode]             = useState(false);
@@ -1474,6 +1523,7 @@ export default function GroupDetailPage() {
 
         const groupJson = await groupRes.json() as { data?: { group: Group; members: Member[] } };
         setGroup(groupJson.data?.group ?? null);
+        setNewGroupName(groupJson.data?.group?.name ?? "");
         setMembers(groupJson.data?.members ?? []);
 
         if (notesRes.ok) {
@@ -1537,6 +1587,39 @@ export default function GroupDetailPage() {
 
   function handleNoteShared(sharedNote: SharedNote) {
     setSharedNotes((prev) => [sharedNote, ...prev]);
+  }
+
+  async function handleDeleteGroup() {
+    setDeletingGroup(true);
+    try {
+      const res = await fetch(`/api/groups/${id}`, { method: "DELETE", credentials: "include" });
+      if (res.ok) router.push("/dashboard?tab=groups");
+    } finally {
+      setDeletingGroup(false);
+    }
+  }
+
+  async function handleRenameGroup() {
+    if (!newGroupName.trim()) return;
+    setRenamingGroup(true);
+    try {
+      const res = await fetch(`/api/groups/${id}`, {
+        method: "PATCH", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newGroupName.trim() }),
+      });
+      if (res.ok) setGroup((prev) => prev ? { ...prev, name: newGroupName.trim() } : prev);
+    } finally {
+      setRenamingGroup(false);
+    }
+  }
+
+  async function handleRemoveMember(userId: string, name: string) {
+    if (!confirm(`Remove ${name} from the group?`)) return;
+    const res = await fetch(`/api/groups/${id}/members/${userId}`, {
+      method: "DELETE", credentials: "include",
+    });
+    if (res.ok) setMembers((prev) => prev.filter((m) => m.user_id !== userId));
   }
 
   async function handleLeave() {
@@ -1662,6 +1745,84 @@ export default function GroupDetailPage() {
 
       <ViewNoteModal note={viewNote} groupId={id} currentUserId={currentUserId} onClose={() => setViewNote(null)} />
 
+      {/* Delete group confirmation */}
+      <ConfirmDialog
+        open={deleteGroupConfirm}
+        title="Delete this group?"
+        description={`This will permanently delete "${group.name}" and ALL shared notes, group notes, sessions and predictions. This cannot be undone.`}
+        confirmLabel="Delete Group"
+        onConfirm={handleDeleteGroup}
+        onCancel={() => setDeleteGroupConfirm(false)}
+        loading={deletingGroup}
+      />
+
+      {/* Group Settings modal */}
+      <Dialog open={showGroupSettings} onOpenChange={setShowGroupSettings}>
+        <DialogContent className="flex max-h-[90vh] flex-col p-0">
+          <div className="shrink-0 border-b border-border px-6 pb-3 pt-6">
+            <DialogHeader><DialogTitle>Group Settings</DialogTitle></DialogHeader>
+          </div>
+          <div className="flex-1 space-y-6 overflow-y-auto px-6 py-4" style={{ WebkitOverflowScrolling: "touch" }}>
+            {/* Rename */}
+            <section>
+              <h3 className="mb-3 text-sm font-semibold">Group Name</h3>
+              <div className="flex gap-2">
+                <input
+                  value={newGroupName}
+                  onChange={(e) => setNewGroupName(e.target.value)}
+                  placeholder="Group name"
+                  className="flex h-10 flex-1 rounded-md border border-border bg-input px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+                <Button size="sm" onClick={handleRenameGroup} disabled={renamingGroup || !newGroupName.trim()}>
+                  {renamingGroup ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+                </Button>
+              </div>
+            </section>
+
+            {/* Members */}
+            <section>
+              <h3 className="mb-3 text-sm font-semibold">Members ({members.length})</h3>
+              <div className="space-y-2">
+                {members.map((m) => (
+                  <div key={m.id} className="flex items-center justify-between rounded-lg border border-border/60 bg-card px-3 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-accent/20 text-xs font-medium text-accent">
+                        {(m.users?.full_name ?? "U")[0].toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">{m.users?.full_name ?? "Unknown"}</p>
+                        <p className="text-xs capitalize text-muted-foreground">{m.role}</p>
+                      </div>
+                    </div>
+                    {m.role !== "owner" && (
+                      <button
+                        onClick={() => void handleRemoveMember(m.user_id, m.users?.full_name ?? "this member")}
+                        className="rounded-md border border-destructive/30 px-2.5 py-1 text-xs text-destructive transition-colors hover:bg-destructive/10"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {/* Danger zone */}
+            <section className="rounded-xl border border-destructive/30 bg-destructive/5 p-4">
+              <h3 className="mb-1 text-sm font-semibold text-destructive">Danger Zone</h3>
+              <p className="mb-3 text-xs text-muted-foreground">These actions cannot be undone.</p>
+              <Button
+                variant="outline" size="sm"
+                className="border-destructive/30 text-destructive hover:bg-destructive/10"
+                onClick={() => { setShowGroupSettings(false); setDeleteGroupConfirm(true); }}
+              >
+                <Trash2 className="h-4 w-4" />Delete Group
+              </Button>
+            </section>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {noCardsToast && (
         <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-xl border border-border bg-card px-5 py-3 text-sm shadow-lg">
           {noCardsToast}
@@ -1702,6 +1863,11 @@ export default function GroupDetailPage() {
           <div className="flex flex-wrap gap-2">
             <InviteDialog groupId={group.id} />
             <ShareNoteDialog groupId={group.id} myNotes={myNotes} members={members} onShared={handleNoteShared} />
+            {isOwner && (
+              <Button variant="outline" size="sm" onClick={() => setShowGroupSettings(true)}>
+                <Settings className="h-4 w-4" /><span className="hidden sm:inline">Settings</span>
+              </Button>
+            )}
             {myRole && myRole !== "owner" && (
               <Button variant="outline" size="sm" onClick={() => setLeaveConfirmOpen(true)} className="text-destructive hover:text-destructive">
                 <LogOut className="h-4 w-4" />Leave
