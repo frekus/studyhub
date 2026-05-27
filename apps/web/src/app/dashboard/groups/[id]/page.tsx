@@ -691,7 +691,7 @@ function GroupNotesTab({ groupId, currentUserId, isOwner }: {
               value={content} onChange={(e) => setContent(e.target.value)}
               placeholder="Content (optional)"
               rows={5}
-              className="flex w-full rounded-md border border-border bg-input px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+              className="w-full rounded-md border border-border bg-input px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
             />
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
@@ -708,7 +708,7 @@ function GroupNotesTab({ groupId, currentUserId, isOwner }: {
             <textarea
               value={editContent} onChange={(e) => setEditContent(e.target.value)}
               rows={10}
-              className="mt-4 flex w-full rounded-md border border-border bg-input px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+              className="mt-4 w-full rounded-md border border-border bg-input px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
             />
             <div className="mt-3 flex justify-end gap-2">
               <Button variant="outline" onClick={() => setEditNote(null)}>Cancel</Button>
