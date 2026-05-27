@@ -22,7 +22,7 @@ import {
   Plus, Trash2, ChevronDown, ChevronUp,
   BookOpen, Loader2, Layers,
   Users, ExternalLink, UserPlus, GraduationCap,
-  Upload, CheckCircle2, XCircle, ChevronRight, HelpCircle, Zap,
+  Upload, CheckCircle2, CheckCircle, XCircle, Eye, ChevronRight, HelpCircle, Zap,
   Folder, FolderOpen, Brain, Target, Star, FolderInput,
   Pencil, Check, X as XIcon, Bell,
   Calendar, Clock, RotateCcw, History, ThumbsDown, ThumbsUp,
@@ -1127,10 +1127,12 @@ function PredictionsModal({ exam, onAskAI }: { exam: Exam; onAskAI?: (q: string)
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" variant="outline" className="gap-1.5">
-          <GraduationCap className="h-3.5 w-3.5" />
-          View Predictions
-        </Button>
+        <button
+          title="View Predictions"
+          className="flex items-center justify-center h-7 w-7 rounded-full bg-accent/15 text-accent hover:bg-accent/30 transition-colors"
+        >
+          <Eye className="h-4 w-4" />
+        </button>
       </DialogTrigger>
       <DialogContent className="max-h-[80vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
@@ -1176,32 +1178,35 @@ function ExamCard({ exam, onDelete, onAskAI }: { exam: Exam; onDelete: (id: stri
         onCancel={() => setConfirmOpen(false)}
         loading={deleting}
       />
-      <div className="group rounded-xl border border-border/60 border-l-4 border-l-accent bg-card p-3 sm:p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg">
-        <div className="flex items-center justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <h3 className="truncate text-sm font-semibold leading-snug">{exam.title}</h3>
-            <p className="mt-0.5 text-xs text-muted-foreground">{formatShortDate(exam.created_at)}</p>
+      <div className="rounded-xl border border-border/60 bg-card p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-sm leading-snug break-words">{exam.title}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {new Date(exam.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+            </p>
           </div>
-          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-            {exam.status === "pending" && (
-              <span className="flex items-center gap-1.5 rounded-full bg-orange-500/15 px-2.5 py-1 text-xs font-medium text-orange-400">
-                <Loader2 className="h-3 w-3 animate-spin" />Analyzing…
-              </span>
-            )}
+          <div className="flex items-center gap-2 shrink-0">
             {exam.status === "ready" && (
-              <span className="flex items-center gap-1.5 rounded-full bg-green-500/15 px-2.5 py-1 text-xs font-medium text-green-400">
-                <CheckCircle2 className="h-3.5 w-3.5" />Ready
-              </span>
+              <div title="Ready" className="flex items-center justify-center h-7 w-7 rounded-full bg-green-500/15">
+                <CheckCircle className="h-4 w-4 text-green-500" />
+              </div>
+            )}
+            {exam.status === "pending" && (
+              <div title="Generating..." className="flex items-center justify-center h-7 w-7 rounded-full bg-accent/15">
+                <Loader2 className="h-4 w-4 text-accent animate-spin" />
+              </div>
             )}
             {exam.status === "failed" && (
-              <span className="flex items-center gap-1.5 rounded-full bg-red-500/15 px-2.5 py-1 text-xs font-medium text-red-400">
-                <XCircle className="h-3.5 w-3.5" />Failed
-              </span>
+              <div title="Failed" className="flex items-center justify-center h-7 w-7 rounded-full bg-destructive/15">
+                <XCircle className="h-4 w-4 text-destructive" />
+              </div>
             )}
             {exam.status === "ready" && <PredictionsModal exam={exam} onAskAI={onAskAI} />}
             <button
               onClick={() => setConfirmOpen(true)}
-              className="rounded p-1 text-muted-foreground opacity-0 transition-opacity duration-200 group-hover:opacity-100 hover:text-destructive"
+              title="Delete"
+              className="flex items-center justify-center h-7 w-7 rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
               aria-label="Delete exam"
             >
               <Trash2 className="h-4 w-4" />
