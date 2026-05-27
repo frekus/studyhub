@@ -1262,10 +1262,32 @@ function ExamPredictionsTab({ groupId, currentUserId }: { groupId: string; curre
   async function handleGenerate() {
     if (uploads.length < 2) { setShowUploadNotice(true); return; }
     setGenerating(true);
-    const res = await fetch(`/api/groups/${groupId}/predictions`, { method: "POST" });
-    const j = await res.json();
-    if (res.ok) setPrediction({ id: j.data.predictionId, status: "pending", papers_count: uploads.length, members_count: 0, predictions: null, created_at: new Date().toISOString() });
-    setGenerating(false);
+    try {
+      const res = await fetch(
+        `/api/groups/${groupId}/predictions`,
+        { method: "POST", credentials: "include" }
+      );
+      const j = await res.json();
+      console.log('[predictions] response:', res.status, j);
+      if (res.ok) {
+        setPrediction({
+          id: j.data.predictionId,
+          status: "pending",
+          papers_count: uploads.length,
+          members_count: 0,
+          predictions: null,
+          created_at: new Date().toISOString(),
+        });
+      } else {
+        console.error('[predictions] error:', j.error);
+        alert('Error: ' + (j.error ?? 'Unknown error'));
+      }
+    } catch (e) {
+      console.error('[predictions] fetch failed:', e);
+      alert('Network error - check console');
+    } finally {
+      setGenerating(false);
+    }
   }
 
   const likelihoodColor = (l: string) => l === "high" ? "text-green-500" : l === "medium" ? "text-yellow-500" : "text-muted-foreground";
