@@ -713,8 +713,10 @@ function LiveSessionTab({ groupId, currentUserId, myNotes }: {
   const [startError, setStartError] = useState("");
   const [joining, setJoining] = useState(false);
   const [flashcards, setFlashcards] = useState<Flashcard[]>([]);
+  const [flashcardsWaiting, setFlashcardsWaiting] = useState(false);
   const [connected, setConnected] = useState(false);
   const channelRef = useRef<ReturnType<typeof getSupabase>["channel"] extends (name: string) => infer R ? R : never | null>(null);
+  const fcPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const isHost = session?.host_id === currentUserId;
 
@@ -728,12 +730,61 @@ function LiveSessionTab({ groupId, currentUserId, myNotes }: {
     fetchSession().finally(() => setLoading(false));
   }, [fetchSession]);
 
-  // Load flashcards when session has a note
+  // Load flashcards when session has a note — with Realtime + polling fallback
   useEffect(() => {
-    if (!session?.note_id) { setFlashcards([]); return; }
-    fetch(`/api/notes/${session.note_id}/flashcards`)
-      .then((r) => r.json())
-      .then((j) => setFlashcards(j.data?.flashcards ?? []));
+    const noteId = session?.note_id;
+    if (!noteId) { setFlashcards([]); setFlashcardsWaiting(false); return; }
+
+    let cancelled = false;
+
+    async function fetchFlashcards() {
+      const res = await fetch(`/api/notes/${noteId}/flashcards`);
+      const j = await res.json() as { data?: { flashcards: Flashcard[] } };
+      const cards: Flashcard[] = j.data?.flashcards ?? [];
+      if (cancelled) return;
+      setFlashcards(cards);
+      if (cards.length > 0) {
+        setFlashcardsWaiting(false);
+        // Stop polling once loaded
+        if (fcPollRef.current) { clearInterval(fcPollRef.current); fcPollRef.current = null; }
+      }
+      return cards.length;
+    }
+
+    fetchFlashcards().then((count) => {
+      if (cancelled) return;
+      if (count === 0) {
+        setFlashcardsWaiting(true);
+
+        // Realtime: listen for INSERT on flashcards for this note
+        const supabase = getSupabase();
+        const fcChannel = supabase
+          .channel(`flashcards-ready:${noteId}`)
+          .on("postgres_changes", {
+            event: "INSERT",
+            schema: "public",
+            table: "flashcards",
+            filter: `note_id=eq.${noteId}`,
+          }, () => { void fetchFlashcards(); })
+          .subscribe();
+
+        // Polling fallback every 5 s
+        fcPollRef.current = setInterval(() => { void fetchFlashcards(); }, 5000);
+
+        // Cleanup on unmount or note change
+        return () => {
+          cancelled = true;
+          void supabase.removeChannel(fcChannel);
+          if (fcPollRef.current) { clearInterval(fcPollRef.current); fcPollRef.current = null; }
+        };
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      if (fcPollRef.current) { clearInterval(fcPollRef.current); fcPollRef.current = null; }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.note_id]);
 
   // Realtime subscription to session changes
@@ -928,8 +979,15 @@ function LiveSessionTab({ groupId, currentUserId, myNotes }: {
 
       {/* Flashcard display */}
       {totalCards === 0 ? (
-        <div className="rounded-xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">
-          Flashcards are being generated for this note…
+        <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">
+          {flashcardsWaiting ? (
+            <>
+              <Loader2 className="h-5 w-5 animate-spin text-accent" />
+              <span>Generating flashcards…</span>
+            </>
+          ) : (
+            <span>No flashcards found for this note.</span>
+          )}
         </div>
       ) : (
         <div className="space-y-4">
@@ -1481,17 +1539,13 @@ export default function GroupDetailPage() {
         <div className="grid gap-8 lg:grid-cols-4">
           <aside className="lg:col-span-1">
             <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Members</h2>
-            <div className="relative">
-              <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 lg:flex-col lg:gap-0 lg:space-y-1.5">
-                {members.map((m) => (
-                  <div key={m.id} className="flex shrink-0 items-center justify-between rounded-lg border border-border/60 bg-card px-3 py-2 lg:shrink lg:w-full">
-                    <span className="truncate text-sm whitespace-nowrap lg:whitespace-normal">{m.users?.full_name ?? `User ${m.user_id.slice(0, 8)}`}</span>
-                    {m.role === "owner" && <Crown className="ml-2 h-3 w-3 shrink-0 text-yellow-400" />}
-                  </div>
-                ))}
-              </div>
-              {/* Fade hint for horizontal scroll on mobile */}
-              <div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-background to-transparent lg:hidden" />
+            <div className="flex flex-wrap gap-2">
+              {members.map((m) => (
+                <div key={m.id} className="flex min-w-0 max-w-[140px] items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5">
+                  <span className="truncate text-sm">{m.users?.full_name ?? `User ${m.user_id.slice(0, 8)}`}</span>
+                  {m.role === "owner" && <Crown className="h-3 w-3 shrink-0 text-yellow-400" />}
+                </div>
+              ))}
             </div>
           </aside>
 

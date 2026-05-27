@@ -888,7 +888,10 @@ function NewNoteDialog({ onCreated, open, onOpenChange, onLimitReached, folders,
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
-        <Button><Plus className="h-4 w-4" />New note</Button>
+        <Button className="min-w-[44px]">
+          <Plus className="h-4 w-4" />
+          <span className="hidden sm:inline">New note</span>
+        </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader><DialogTitle>New study note</DialogTitle></DialogHeader>
@@ -1000,7 +1003,10 @@ function CreateGroupDialog({ onCreated, onLimitReached }: {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button><Plus className="h-4 w-4" />Create group</Button>
+        <Button className="min-w-[44px]">
+          <Plus className="h-[18px] w-[18px]" />
+          <span className="hidden sm:inline">Create group</span>
+        </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader><DialogTitle>New study group</DialogTitle></DialogHeader>
@@ -2325,35 +2331,21 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
             )}
 
             {/* Header row */}
-            <div className="mb-6">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h1 className="text-2xl font-bold">My Notes</h1>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {notes.length === 0 ? "No notes yet" : `${notes.length} note${notes.length === 1 ? "" : "s"}`}
-                  </p>
-                </div>
-                <div className="hidden sm:block">
-                  <NewNoteDialog
-                    onCreated={handleNoteCreated}
-                    open={newNoteOpen}
-                    onOpenChange={setNewNoteOpen}
-                    onLimitReached={showUpgradeModal}
-                    folders={folders}
-                    initialFolderId={selectedFolderId === "uncategorized" ? null : selectedFolderId}
-                  />
-                </div>
+            <div className="mb-6 flex items-center justify-between gap-3">
+              <div>
+                <h1 className="text-2xl font-bold">My Notes</h1>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {notes.length === 0 ? "No notes yet" : `${notes.length} note${notes.length === 1 ? "" : "s"}`}
+                </p>
               </div>
-              <div className="mt-3 sm:hidden">
-                <NewNoteDialog
-                  onCreated={handleNoteCreated}
-                  open={newNoteOpen}
-                  onOpenChange={setNewNoteOpen}
-                  onLimitReached={showUpgradeModal}
-                  folders={folders}
-                  initialFolderId={selectedFolderId === "uncategorized" ? null : selectedFolderId}
-                />
-              </div>
+              <NewNoteDialog
+                onCreated={handleNoteCreated}
+                open={newNoteOpen}
+                onOpenChange={setNewNoteOpen}
+                onLimitReached={showUpgradeModal}
+                folders={folders}
+                initialFolderId={selectedFolderId === "uncategorized" ? null : selectedFolderId}
+              />
             </div>
 
             {/* Mobile folder chips */}
@@ -2446,19 +2438,15 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
                     {groups.length === 0 ? "No groups yet" : `${groups.length} group${groups.length === 1 ? "" : "s"}`}
                   </p>
                 </div>
-                <div className="hidden items-center gap-2 sm:flex">
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href="/dashboard/groups/join"><UserPlus className="h-4 w-4" />Join group</Link>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" className="min-w-[44px]" asChild>
+                    <Link href="/dashboard/groups/join">
+                      <UserPlus className="h-[18px] w-[18px]" />
+                      <span className="hidden sm:inline">Join group</span>
+                    </Link>
                   </Button>
                   <CreateGroupDialog onCreated={handleGroupCreated} onLimitReached={showUpgradeModal} />
                 </div>
-              </div>
-              <div className="mt-3 flex gap-2 sm:hidden">
-                <Button variant="outline" size="sm" className="flex-1" asChild>
-                  <Link href="/dashboard/groups/join"><UserPlus className="h-4 w-4" />Join group</Link>
-                </Button>
-                <CreateGroupDialog onCreated={handleGroupCreated} onLimitReached={showUpgradeModal} />
-              </div>
             </div>
             {groups.length === 0 ? (
               <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-16 text-center">
@@ -2772,7 +2760,8 @@ function PlannerTab({
         </div>
         <button onClick={onCreatePlanOpen}
           className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:opacity-90">
-          + Create Study Plan
+          <span>+</span>
+          <span className="hidden sm:inline"> Create Study Plan</span>
         </button>
       </div>
 
