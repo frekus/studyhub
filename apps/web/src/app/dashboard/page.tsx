@@ -26,8 +26,7 @@ import {
   Folder, FolderOpen, Brain, Target, Star, FolderInput,
   Pencil, Check, X as XIcon, Bell,
   Calendar, Clock, RotateCcw, History, ThumbsDown, ThumbsUp,
-  Bot, Home, Paperclip, Sparkles, Send,
-} from "lucide-react";
+  Bot, Home, Paperclip, Sparkles, Send,, Eye} from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { AvatarDropdown } from "@/components/avatar-dropdown";
 import { cn } from "@/lib/utils";
@@ -1127,10 +1126,12 @@ function PredictionsModal({ exam, onAskAI }: { exam: Exam; onAskAI?: (q: string)
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" variant="outline" className="gap-1.5">
-          <GraduationCap className="h-3.5 w-3.5" />
-          View Predictions
-        </Button>
+        <button
+          title="View Predictions"
+          className="flex h-7 w-7 items-center justify-center rounded-full bg-accent/15 text-accent hover:bg-accent/30 transition-colors"
+        >
+          <Eye className="h-4 w-4" />
+        </button>
       </DialogTrigger>
       <DialogContent className="max-h-[80vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
@@ -1182,27 +1183,28 @@ function ExamCard({ exam, onDelete, onAskAI }: { exam: Exam; onDelete: (id: stri
             <h3 className="truncate text-sm font-semibold leading-snug">{exam.title}</h3>
             <p className="mt-0.5 text-xs text-muted-foreground">{formatShortDate(exam.created_at)}</p>
           </div>
-          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+          <div className="flex shrink-0 items-center gap-1.5">
             {exam.status === "pending" && (
-              <span className="flex items-center gap-1.5 rounded-full bg-orange-500/15 px-2.5 py-1 text-xs font-medium text-orange-400">
-                <Loader2 className="h-3 w-3 animate-spin" />Analyzing…
-              </span>
+              <div title="Analyzing..." className="flex h-7 w-7 items-center justify-center rounded-full bg-orange-500/15">
+                <Loader2 className="h-4 w-4 animate-spin text-orange-400" />
+              </div>
             )}
             {exam.status === "ready" && (
-              <span className="flex items-center gap-1.5 rounded-full bg-green-500/15 px-2.5 py-1 text-xs font-medium text-green-400">
-                <CheckCircle2 className="h-3.5 w-3.5" />Ready
-              </span>
+              <div title="Ready" className="flex h-7 w-7 items-center justify-center rounded-full bg-green-500/15">
+                <CheckCircle2 className="h-4 w-4 text-green-500" />
+              </div>
             )}
             {exam.status === "failed" && (
-              <span className="flex items-center gap-1.5 rounded-full bg-red-500/15 px-2.5 py-1 text-xs font-medium text-red-400">
-                <XCircle className="h-3.5 w-3.5" />Failed
-              </span>
+              <div title="Failed" className="flex h-7 w-7 items-center justify-center rounded-full bg-red-500/15">
+                <XCircle className="h-4 w-4 text-red-400" />
+              </div>
             )}
             {exam.status === "ready" && <PredictionsModal exam={exam} onAskAI={onAskAI} />}
             <button
               onClick={() => setConfirmOpen(true)}
-              className="rounded p-1 text-muted-foreground opacity-0 transition-opacity duration-200 group-hover:opacity-100 hover:text-destructive"
+              className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
               aria-label="Delete exam"
+              title="Delete exam"
             >
               <Trash2 className="h-4 w-4" />
             </button>
@@ -1980,7 +1982,34 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
     } finally { setCancellingSub(false); }
   }
 
-  if (loading) return <div className="flex min-h-screen items-center justify-center bg-background"><p className="text-muted-foreground">Loading…</p></div>;
+  if (loading) return (
+    <div className="min-h-screen bg-background">
+      <div className="sticky top-0 z-40 border-b border-border bg-background px-4 py-3">
+        <div className="mx-auto flex max-w-5xl items-center justify-between">
+          <div className="h-6 w-28 rounded-md bg-muted animate-pulse" />
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded-full bg-muted animate-pulse" />
+            <div className="h-8 w-8 rounded-full bg-muted animate-pulse" />
+          </div>
+        </div>
+      </div>
+      <div className="mx-auto max-w-5xl px-4 py-6 space-y-4">
+        <div className="h-16 rounded-xl bg-muted animate-pulse" />
+        <div className="flex gap-6 border-b border-border pb-0">
+          {[1,2,3,4].map(i => <div key={i} className="h-8 w-14 rounded-md bg-muted animate-pulse mb-2" />)}
+        </div>
+        <div className="space-y-3 pt-2">
+          {[1,2,3].map(i => (
+            <div key={i} className="rounded-xl border border-border bg-card p-4 space-y-3">
+              <div className="h-4 w-2/3 rounded bg-muted animate-pulse" />
+              <div className="h-3 w-1/3 rounded bg-muted animate-pulse" />
+              <div className="h-12 w-full rounded-lg bg-muted animate-pulse" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
   if (error)   return <div className="flex min-h-screen items-center justify-center bg-background"><p className="text-destructive">{error}</p></div>;
 
   // ── Full-screen flashcard study mode ──────────────────────────────────────

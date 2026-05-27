@@ -494,30 +494,10 @@ function SharedNoteCard({ note, currentUserId, onView, onStudy, isHighlighted }:
     }
   }, [isHighlighted]);
 
-  const isOwnNote = !!currentUserId && note.shared_by === currentUserId;
-  const [importing, setImporting] = useState(false);
-  const [importDone, setImportDone] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return localStorage.getItem(`imported_${note.note_id}`) === "true";
-  });
-  const [importError, setImportError] = useState("");
+
   const [studyLoading, setStudyLoading] = useState(false);
 
-  async function handleImport() {
-    setImporting(true); setImportError("");
-    try {
-      const res = await fetch("/api/notes/import", {
-        method: "POST", credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ noteId: note.note_id }),
-      });
-      const json = await res.json() as { error?: string };
-      if (!res.ok) { setImportError(json.error ?? "Import failed"); return; }
-      localStorage.setItem(`imported_${note.note_id}`, "true");
-      setImportDone(true);
-    } catch { setImportError("Network error. Please try again."); }
-    finally { setImporting(false); }
-  }
+
 
   async function handleStudy() {
     setStudyLoading(true);
@@ -546,7 +526,7 @@ function SharedNoteCard({ note, currentUserId, onView, onStudy, isHighlighted }:
           <Loader2 className="h-3 w-3 animate-spin" />Summary generating…
         </p>
       )}
-      {importError && <p className="mt-2 text-xs text-destructive">{importError}</p>}
+
       <div className="mt-3 space-y-1.5">
         {/* View — full width */}
         <button
@@ -555,35 +535,14 @@ function SharedNoteCard({ note, currentUserId, onView, onStudy, isHighlighted }:
         >
           <FileText className="h-3.5 w-3.5" />View & Comment
         </button>
-        {/* Flashcards + Import/status — side by side */}
-        <div className="flex gap-1.5">
-          <button
-            onClick={handleStudy}
-            disabled={studyLoading}
-            className="flex min-h-[40px] flex-1 items-center justify-center gap-1.5 rounded-lg border border-border py-2 text-sm text-muted-foreground transition-colors hover:border-accent hover:text-accent disabled:opacity-60"
-          >
-            {studyLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Layers className="h-3.5 w-3.5" />}
-            Flashcards
-          </button>
-          {isOwnNote ? (
-            <span className="flex min-h-[40px] flex-1 items-center justify-center gap-1 rounded-lg border border-border bg-muted py-2 text-xs font-medium text-muted-foreground">
-              Your note
-            </span>
-          ) : importDone ? (
-            <span className="flex min-h-[40px] flex-1 items-center justify-center gap-1 rounded-lg border border-border bg-muted py-2 text-xs font-medium text-muted-foreground">
-              <Check className="h-3.5 w-3.5 text-green-500" />Imported
-            </span>
-          ) : (
-            <button
-              onClick={handleImport}
-              disabled={importing}
-              className="flex min-h-[40px] flex-1 items-center justify-center gap-1.5 rounded-lg bg-accent py-2 text-sm font-medium text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
-            >
-              {importing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-              {importing ? "Importing…" : "Import"}
-            </button>
-          )}
-        </div>
+        <button
+          onClick={handleStudy}
+          disabled={studyLoading}
+          className="flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-lg border border-border py-2 text-sm text-muted-foreground transition-colors hover:border-accent hover:text-accent disabled:opacity-60"
+        >
+          {studyLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Layers className="h-3.5 w-3.5" />}
+          Flashcards
+        </button>
       </div>
     </div>
   );
