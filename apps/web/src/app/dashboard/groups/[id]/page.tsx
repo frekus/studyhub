@@ -671,10 +671,11 @@ function GroupNotesTab({ groupId, currentUserId, isOwner }: {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-center justify-between mb-3">
         <p className="text-sm text-muted-foreground">{notes.length} collaborative note{notes.length !== 1 ? "s" : ""}</p>
-        <Button size="sm" className="w-full sm:w-auto" onClick={() => setCreateOpen(true)}>
-          <PlusCircle className="h-4 w-4" /><span className="hidden sm:inline">New </span>Group Note
+        <Button size="sm" onClick={() => setCreateOpen(true)} className="shrink-0" title="New Group Note">
+          <PlusCircle className="h-4 w-4" />
+          <span className="hidden sm:inline ml-1.5">New Group Note</span>
         </Button>
       </div>
 
