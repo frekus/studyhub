@@ -670,7 +670,7 @@ function GroupNotesTab({ groupId, currentUserId, isOwner }: {
   if (loading) return <div className="flex justify-center py-12"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 w-full min-w-0">
       <div className="flex justify-center mb-3">
         <Button size="sm" onClick={() => setCreateOpen(true)} className="gap-2">
           <PlusCircle className="h-4 w-4" />
@@ -679,7 +679,7 @@ function GroupNotesTab({ groupId, currentUserId, isOwner }: {
       </div>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent>
+        <DialogContent className="w-[calc(100vw-2rem)] max-w-xl">
           <DialogHeader><DialogTitle>Create group note</DialogTitle></DialogHeader>
           <form onSubmit={handleCreate} className="mt-4 space-y-3">
             <input
@@ -703,7 +703,7 @@ function GroupNotesTab({ groupId, currentUserId, isOwner }: {
 
       {editNote && (
         <Dialog open onOpenChange={() => setEditNote(null)}>
-          <DialogContent className="max-w-xl">
+          <DialogContent className="w-[calc(100vw-2rem)] max-w-xl">
             <DialogHeader><DialogTitle>Edit: {editNote.title}</DialogTitle></DialogHeader>
             <textarea
               value={editContent} onChange={(e) => setEditContent(e.target.value)}
@@ -737,11 +737,11 @@ function GroupNotesTab({ groupId, currentUserId, isOwner }: {
       ) : (
         <div className="space-y-3">
           {notes.map((n) => (
-            <div key={n.id} className="rounded-xl border border-border/60 bg-card p-4 [border-left:4px_solid_hsl(var(--accent))]">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <p className="font-semibold">{n.title}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">by {n.creator_name} · edited by {n.editor_name}</p>
+            <div key={n.id} className="rounded-xl border border-border/60 bg-card p-4 w-full min-w-0 overflow-hidden [border-left:4px_solid_hsl(var(--accent))]">
+              <div className="flex items-start justify-between gap-2 min-w-0">
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold truncate">{n.title}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground truncate">by {n.creator_name} · edited by {n.editor_name}</p>
                 </div>
                 <div className="flex gap-1.5 shrink-0">
                   <button
@@ -769,14 +769,14 @@ function GroupNotesTab({ groupId, currentUserId, isOwner }: {
                 </div>
               </div>
               {n.ai_summary ? (
-                <p className="mt-2 rounded-md bg-accent/10 px-3 py-1.5 text-sm text-accent">{n.ai_summary}</p>
+                <p className="mt-2 rounded-md bg-accent/10 px-3 py-1.5 text-sm text-accent break-words line-clamp-3">{n.ai_summary}</p>
               ) : (
                 <p className="mt-2 flex items-center gap-1.5 text-xs italic text-muted-foreground">
                   <Loader2 className="h-3 w-3 animate-spin" />Generating AI summary…
                 </p>
               )}
               {n.content && (
-                <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{n.content}</p>
+                <p className="mt-2 line-clamp-2 text-sm text-muted-foreground break-words">{n.content}</p>
               )}
             </div>
           ))}
@@ -1988,7 +1988,7 @@ export default function GroupDetailPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-4xl px-4 sm:px-6 py-6 sm:py-8">
+      <main className="mx-auto max-w-4xl px-4 sm:px-6 py-6 sm:py-8 overflow-x-hidden">
         <Link href="/dashboard" className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
           <ArrowLeft className="h-4 w-4" />Back to dashboard
         </Link>
@@ -2043,7 +2043,7 @@ export default function GroupDetailPage() {
             )}
           </aside>
 
-          <section className="lg:col-span-3">
+          <section className="lg:col-span-3 min-w-0 overflow-hidden w-full">
             {/* Tabs */}
             <div className="mb-5 -mx-4 flex border-b border-border overflow-x-auto scrollbar-hide">
               {TABS.map((t) => (
@@ -2070,39 +2070,49 @@ export default function GroupDetailPage() {
 
             {/* Tab content */}
             {activeTab === "shared" && (
-              sharedNotes.length === 0 ? (
-                <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-12 text-center">
-                  <BookOpen className="mb-3 h-8 w-8 text-muted-foreground" />
-                  <p className="text-sm font-medium">No notes shared yet</p>
-                  <p className="mt-1 text-xs text-muted-foreground">Share one of your notes with this group</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {sharedNotes.map((sn) => (
-                    <SharedNoteCard
-                      key={sn.id} note={sn} currentUserId={currentUserId}
-                      onView={setViewNote} onStudy={openStudyMode}
-                      isHighlighted={highlightedNoteId === sn.note_id}
-                    />
-                  ))}
-                </div>
-              )
+              <div className="w-full min-w-0 overflow-hidden">
+                {sharedNotes.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-12 text-center">
+                    <BookOpen className="mb-3 h-8 w-8 text-muted-foreground" />
+                    <p className="text-sm font-medium">No notes shared yet</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Share one of your notes with this group</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {sharedNotes.map((sn) => (
+                      <SharedNoteCard
+                        key={sn.id} note={sn} currentUserId={currentUserId}
+                        onView={setViewNote} onStudy={openStudyMode}
+                        isHighlighted={highlightedNoteId === sn.note_id}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
 
             {activeTab === "group-notes" && (
-              <GroupNotesTab groupId={id} currentUserId={currentUserId} isOwner={isOwner} />
+              <div className="w-full min-w-0 overflow-hidden">
+                <GroupNotesTab groupId={id} currentUserId={currentUserId} isOwner={isOwner} />
+              </div>
             )}
 
             {activeTab === "live" && (
-              <LiveSessionTab groupId={id} currentUserId={currentUserId} myNotes={myNotes} />
+              <div className="w-full min-w-0 overflow-hidden">
+                <LiveSessionTab groupId={id} currentUserId={currentUserId} myNotes={myNotes} />
+              </div>
             )}
 
             {activeTab === "leaderboard" && (
-              <LeaderboardTab groupId={id} currentUserId={currentUserId} />
+              <div className="w-full min-w-0 overflow-hidden">
+                <LeaderboardTab groupId={id} currentUserId={currentUserId} />
+              </div>
             )}
 
             {activeTab === "exam" && (
-              <ExamPredictionsTab groupId={id} currentUserId={currentUserId} />
+              <div className="w-full min-w-0 overflow-hidden">
+                <ExamPredictionsTab groupId={id} currentUserId={currentUserId} />
+              </div>
             )}
           </section>
         </div>
