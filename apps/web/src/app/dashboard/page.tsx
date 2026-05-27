@@ -1986,7 +1986,7 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
       <div className="sticky top-0 z-40 border-b border-border bg-background px-4 py-3">
         <div className="mx-auto flex max-w-5xl items-center justify-between">
           <div className="h-6 w-28 rounded-md bg-muted animate-pulse" />
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
             <div className="h-8 w-8 rounded-full bg-muted animate-pulse" />
             <div className="h-8 w-8 rounded-full bg-muted animate-pulse" />
             <div className="h-8 w-8 rounded-full bg-muted animate-pulse" />
@@ -1994,24 +1994,33 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
         </div>
       </div>
 
-      <div className="mx-auto max-w-5xl px-4 py-6">
+      <div className="mx-auto max-w-5xl px-4 py-6 space-y-4">
         {/* Streak widget skeleton */}
-        <div className="mb-4 h-16 rounded-xl bg-muted animate-pulse" />
+        <div className="h-16 rounded-xl bg-muted animate-pulse" />
 
         {/* Tab bar skeleton */}
-        <div className="mb-6 flex gap-4 border-b border-border pb-0">
+        <div className="flex gap-6 border-b border-border pb-0">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="mb-2 h-8 w-16 rounded-md bg-muted animate-pulse" />
+            <div key={i} className="mb-2 h-8 w-14 rounded-md bg-muted animate-pulse" />
           ))}
         </div>
 
         {/* Note cards skeleton */}
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="rounded-xl border border-border bg-card p-4 space-y-2">
-              <div className="h-4 w-3/4 rounded bg-muted animate-pulse" />
-              <div className="h-3 w-1/2 rounded bg-muted animate-pulse" />
-              <div className="mt-2 h-10 w-full rounded-lg bg-muted animate-pulse" />
+        <div className="space-y-3 pt-2">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="rounded-xl border border-border bg-card p-4 space-y-3">
+              <div className="flex items-start justify-between">
+                <div className="space-y-2 flex-1">
+                  <div className="h-4 w-2/3 rounded bg-muted animate-pulse" />
+                  <div className="h-3 w-1/3 rounded bg-muted animate-pulse" />
+                </div>
+                <div className="h-6 w-16 rounded-full bg-muted animate-pulse shrink-0" />
+              </div>
+              <div className="h-12 w-full rounded-lg bg-muted animate-pulse" />
+              <div className="flex gap-2">
+                <div className="h-8 flex-1 rounded-lg bg-muted animate-pulse" />
+                <div className="h-8 flex-1 rounded-lg bg-muted animate-pulse" />
+              </div>
             </div>
           ))}
         </div>
