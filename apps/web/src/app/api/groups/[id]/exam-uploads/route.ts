@@ -15,18 +15,34 @@ function ext(name: string) { const i = name.lastIndexOf("."); return i >= 0 ? na
 async function extractText(file: File): Promise<string> {
   const e = ext(file.name);
   const buf = Buffer.from(await file.arrayBuffer());
+
   if (e === ".txt") return buf.toString("utf-8");
+
   if (e === ".pdf") {
-    const { default: PDFParser } = await import("pdf2json");
-    return new Promise((resolve, reject) => {
-      const p = new PDFParser();
-      p.on("pdfParser_dataReady", (d) => resolve(
-        d.Pages.flatMap((pg) => pg.Texts).map((t) => decodeURIComponent(t.R[0]?.T ?? "")).join(" ")
-      ));
-      p.on("pdfParser_dataError", (e) => reject(e instanceof Error ? e : e.parserError));
-      p.parseBuffer(buf);
+    // Fast local extraction using pdf-parse (no worker, no network, no timeout)
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const pdfParse = require("pdf-parse");
+      const data = await pdfParse(buf, { max: 0 });
+      const text = (data.text ?? "").replace(/\s+/g, " ").trim();
+      // If text extracted successfully, return it
+      if (text.length >= 30) return text;
+    } catch { /* fall through to vision */ }
+
+    // Fallback: scanned PDF — use Anthropic vision on first page
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const res = await anthropic.messages.create({
+      model: "claude-haiku-4-5-20251001", max_tokens: 2000,
+      messages: [{ role: "user", content: [
+        { type: "image", source: { type: "base64", media_type: "image/jpeg", data: buf.toString("base64") } },
+        { type: "text",  text: "Extract all text from this exam paper. Return only the text." },
+      ]}],
     });
+    const block = res.content[0];
+    return block.type === "text" ? block.text : "";
   }
+
+  // Image files — use Anthropic vision
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const mt: "image/png" | "image/jpeg" = e === ".png" ? "image/png" : "image/jpeg";
   const res = await anthropic.messages.create({

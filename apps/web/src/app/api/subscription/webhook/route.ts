@@ -14,6 +14,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
 
+  // Idempotency — reject duplicate webhook events from Paystack retries
+  const { createAdminClient } = await import("@studyhub/database");
+  const admin = createAdminClient();
+  const eventId = (event as { id?: string }).id ?? `${rawBody.slice(0, 64)}`;
+  const { data: alreadyProcessed } = await admin
+    .from("processed_webhook_events")
+    .select("event_id")
+    .eq("event_id", eventId)
+    .maybeSingle();
+  if (alreadyProcessed) return NextResponse.json({ ok: true, skipped: true });
+  await admin.from("processed_webhook_events").insert({ event_id: eventId }).catch(() => {});
+
   let event: { event: string; data: Record<string, unknown> };
   try {
     event = JSON.parse(rawBody) as typeof event;

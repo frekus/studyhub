@@ -1,6 +1,14 @@
 import Link from "next/link";
 import { BookOpen, ExternalLink, Globe, Mail } from "lucide-react";
 
+,
+  Legal: [
+    { label: "Privacy Policy", href: "/privacy" },
+    { label: "Contact",        href: "mailto:support@studyhubai.xyz" },
+  ],
+};mport Link from "next/link";
+import { BookOpen, ExternalLink, Globe, Mail } from "lucide-react";
+
 const LINKS = {
   Product: [
     { label: "Features",     href: "/#features" },
