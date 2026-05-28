@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { createClient, requireUser } from "@/lib/supabase/server";
+import { createAdminClient } from "@studyhub/database";
 import { ok, err, validationErr } from "@/lib/response";
 import { getOrBuildProfile, buildPersonalisedSystemPrompt } from "@/lib/student-profile";
 
@@ -18,6 +19,24 @@ export async function POST(request: Request) {
   const supabase = await createClient();
   const { user, authErr } = await requireUser(supabase);
   if (authErr) return authErr;
+
+  // Plan-aware rate limit for AI chat
+  const adminClient = createAdminClient();
+  const { data: userRecord } = await adminClient
+    .from("users")
+    .select("subscription_tier")
+    .eq("id", user.id)
+    .single();
+  const tier = (userRecord?.subscription_tier as string) ?? "free";
+  const aiLimits: Record<string, { limit: number; label: string }> = {
+    free:    { limit: 10,  label: "Free plan users can send 10 AI messages per hour" },
+    popular: { limit: 40,  label: "Popular plan users can send 40 AI messages per hour" },
+    pro:     { limit: 100, label: "Pro plan users can send 100 AI messages per hour" },
+  };
+  const { limit: aiLimit, label: aiLabel } = aiLimits[tier] ?? aiLimits.free;
+  const { rateLimit, rateLimitResponse } = await import("@/lib/rate-limit");
+  const { allowed, resetInSeconds } = await rateLimit(`ai:chat:${user.id}`, aiLimit, 60 * 60);
+  if (!allowed) return rateLimitResponse(resetInSeconds, `${aiLabel}.`);
 
   let body: unknown;
   try { body = await request.json(); } catch { return err("Invalid JSON body", 400); }
