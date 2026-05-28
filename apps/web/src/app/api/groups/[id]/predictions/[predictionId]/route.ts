@@ -21,6 +21,17 @@ export async function DELETE(_request: Request, { params }: { params: Params }) 
 
   if (!membership) return err("Not a group member", 403);
 
+  // Verify the user is the creator of this prediction
+  const { data: prediction } = await admin
+    .from("group_predictions")
+    .select("created_by")
+    .eq("id", predictionId)
+    .eq("group_id", groupId)
+    .single();
+
+  if (!prediction) return err("Prediction not found", 404);
+  if (prediction.created_by !== user.id) return err("Only the creator can delete this prediction", 403);
+
   const { error } = await admin
     .from("group_predictions")
     .delete()
