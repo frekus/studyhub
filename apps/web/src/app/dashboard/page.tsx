@@ -966,7 +966,11 @@ function NewNoteDialog({ onCreated, open, onOpenChange, onLimitReached, folders,
         setContent((prev) => prev ? `${prev}\n\n${j.data!.content}` : j.data!.content);
         setUploadedFileName(file.name);
       } else {
-        setError(j.error ?? "Failed to extract file content");
+        setError(
+          res.status === 429
+            ? (j.error ?? "Too many uploads. Please wait before uploading another file.")
+            : (j.error ?? "Failed to extract file content")
+        );
       }
     } catch { setError("Network error extracting file"); }
     finally {
@@ -985,6 +989,7 @@ function NewNoteDialog({ onCreated, open, onOpenChange, onLimitReached, folders,
       const res = await fetch("/api/notes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const json = await res.json();
       if (res.status === 403) { onOpenChange(false); onLimitReached?.(json.error ?? "Note limit reached."); return; }
+      if (res.status === 429) { setError(json.error ?? "Too many requests. Please wait a moment before trying again."); return; }
       if (!res.ok) { setError(json.error ?? "Failed to create note"); return; }
       onCreated(json.data?.note ?? json.data);
       setTitle(""); setContent(""); onOpenChange(false);
@@ -3509,8 +3514,19 @@ function AIAssistantTab({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ conversationId: activeConvId, message: msgText, attachedNoteIds, attachedFileContent }),
       });
-      const j = await res.json() as { data?: { conversationId: string; message: string } };
-      if (!res.ok) { setMessages((prev) => prev.filter((m) => m.id !== tempId)); return; }
+      const j = await res.json() as { data?: { conversationId: string; message: string }; error?: string };
+      if (!res.ok) {
+        setMessages((prev) => prev.filter((m) => m.id !== tempId));
+        const errMsg = j.error ?? "Failed to send message. Please try again.";
+        setMessages((prev) => [...prev, {
+          id: `err-${Date.now()}`,
+          conversation_id: activeConvId ?? "",
+          user_id: "", role: "assistant" as const,
+          content: `⚠️ ${errMsg}`,
+          attachments: [], created_at: new Date().toISOString()
+        }]);
+        return;
+      }
 
       const { conversationId: convId, message: aiMsg } = j.data!;
 

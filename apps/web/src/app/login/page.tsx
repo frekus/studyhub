@@ -32,7 +32,11 @@ export default function LoginPage() {
       const json = await res.json();
 
       if (!res.ok) {
-        setError(json.error ?? "Login failed");
+        setError(
+          res.status === 429
+            ? (json.error ?? "Too many login attempts. Please wait 15 minutes before trying again.")
+            : (json.error ?? "Login failed")
+        );
         return;
       }
 

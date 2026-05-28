@@ -12,6 +12,15 @@ export async function POST(_req: Request, { params }: { params: Params }) {
   const { user, authErr } = await requireUser(supabase);
   if (authErr) return authErr;
 
+  // Rate limit: 10 flashcard generations per user per hour
+  const { rateLimit, rateLimitResponse } = await import("@/lib/rate-limit");
+  const { allowed, resetInSeconds } = await rateLimit(
+    `flashcards:generate:${user.id}`,
+    10,
+    60 * 60
+  );
+  if (!allowed) return rateLimitResponse(resetInSeconds, "You can generate flashcards 10 times per hour.");
+
   const { data: note, error: noteErr } = await supabase
     .from("study_notes")
     .select("title, content")

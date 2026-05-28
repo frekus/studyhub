@@ -8,6 +8,29 @@ const SUPPORTED_EXTENSIONS = new Set([".txt", ".pdf", ".png", ".jpg", ".jpeg"]);
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 const MAX_TEXT_CHARS = 50000;
 
+// Magic byte signatures for allowed file types
+const MAGIC_BYTES: Record<string, number[][]> = {
+  ".pdf":  [[0x25, 0x50, 0x44, 0x46]],                          // %PDF
+  ".png":  [[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]], // PNG
+  ".jpg":  [[0xFF, 0xD8, 0xFF]],                                 // JPEG
+  ".jpeg": [[0xFF, 0xD8, 0xFF]],                                 // JPEG
+  ".txt":  [],                                                    // No magic bytes for txt
+};
+
+function validateMagicBytes(buffer: Buffer, ext: string): string | null {
+  const signatures = MAGIC_BYTES[ext];
+  if (!signatures || signatures.length === 0) return null; // .txt — no check needed
+
+  const matches = signatures.some((sig) =>
+    sig.every((byte, i) => buffer[i] === byte)
+  );
+
+  if (!matches) {
+    return `File content does not match the expected ${ext} format. Please upload a genuine ${ext} file.`;
+  }
+  return null;
+}
+
 function fileExtension(name: string): string {
   const i = name.lastIndexOf(".");
   return i >= 0 ? name.slice(i).toLowerCase() : "";
@@ -75,6 +98,11 @@ export async function POST(request: Request) {
 
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
+
+  // Validate magic bytes (actual file content) not just extension
+  // Prevents disguised malicious files e.g. webshell renamed as .pdf
+  const mimeError = validateMagicBytes(buffer, ext);
+  if (mimeError) return err(mimeError, 400);
 
   let content: string;
   try {

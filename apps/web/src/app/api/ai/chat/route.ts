@@ -19,6 +19,15 @@ export async function POST(request: Request) {
   const { user, authErr } = await requireUser(supabase);
   if (authErr) return authErr;
 
+  // Rate limit: 20 AI messages per user per hour
+  const { rateLimit, rateLimitResponse } = await import("@/lib/rate-limit");
+  const { allowed, resetInSeconds } = await rateLimit(
+    `ai:chat:${user.id}`,
+    20,
+    60 * 60
+  );
+  if (!allowed) return rateLimitResponse(resetInSeconds, "You can send 20 AI messages per hour.");
+
   let body: unknown;
   try { body = await request.json(); } catch { return err("Invalid JSON body", 400); }
 

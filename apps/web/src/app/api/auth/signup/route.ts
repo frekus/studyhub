@@ -9,6 +9,11 @@ const SignupSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  // Rate limit: 10 signup attempts per IP per hour (prevent account farming)
+  const { rateLimit, getClientIp, rateLimitResponse } = await import("@/lib/rate-limit");
+  const ip = getClientIp(request);
+  const { allowed, resetInSeconds } = await rateLimit(`signup:${ip}`, 10, 60 * 60);
+  if (!allowed) return rateLimitResponse(resetInSeconds, "Maximum 10 sign-up attempts per hour from this device.");
   let body: unknown;
   try {
     body = await request.json();
