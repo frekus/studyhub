@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { createClient, requireUser } from "@/lib/supabase/server";
 import { ok, err, validationErr } from "@/lib/response";
+import { getOrBuildProfile, buildPersonalisedSystemPrompt } from "@/lib/student-profile";
 
 export const maxDuration = 60;
 
@@ -69,7 +70,10 @@ export async function POST(request: Request) {
     noteContext += (noteContext ? "\n\n---\n\n" : "") + attachedFileContent;
   }
 
-  let systemPrompt = `You are StudyHub AI, an expert study assistant helping students understand their study material and prepare for exams.
+  const profile = await getOrBuildProfile(user.id).catch(() => null);
+  let systemPrompt = profile
+    ? buildPersonalisedSystemPrompt(profile)
+    : `You are StudyHub AI, an expert study assistant helping students understand their study material and prepare for exams.
 
 Be concise, clear, and educational. Use examples where helpful.
 Format responses with clear structure using markdown.

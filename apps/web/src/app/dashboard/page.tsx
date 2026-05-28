@@ -171,6 +171,22 @@ interface User {
 
 interface UsageStat { used: number; limit: number }
 
+interface StudentProfile {
+  userId: string;
+  fullName: string | null;
+  totalNotes: number;
+  recentTopics: string[];
+  upcomingExams: { subject: string; examDate: string }[];
+  weakAreas: { topic: string; accuracy: number }[];
+  currentStreak: number;
+  totalStudyDays: number;
+  flashcardsReviewed: number;
+  avgAccuracy: number | null;
+  preferredSubjects: string[];
+  profileCompleteness: number;
+  builtAt: string;
+}
+
 interface Subscription {
   tier: string;
   status: string | null;
@@ -664,6 +680,89 @@ function StreakWidget({ streak }: { streak: StreakData }) {
         <p className="mt-2 text-xs font-medium text-orange-400">
           ⚠️ Study today to keep your streak!
         </p>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ProfileCard
+// ---------------------------------------------------------------------------
+
+function ProfileCard({ profile, onRebuild }: { profile: StudentProfile; onRebuild: () => void }) {
+  const [rebuilding, setRebuilding] = useState(false);
+
+  async function handleRebuild() {
+    setRebuilding(true);
+    try {
+      await fetch("/api/profile", { method: "POST" });
+      onRebuild();
+    } finally {
+      setRebuilding(false);
+    }
+  }
+
+  return (
+    <div className="mb-4 rounded-xl border border-accent/20 bg-accent/5 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-accent shrink-0" />
+          <p className="text-sm font-semibold">Your Study Profile</p>
+        </div>
+        <button
+          onClick={handleRebuild}
+          disabled={rebuilding}
+          title="Refresh profile"
+          className="text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <RotateCcw className={cn("h-3.5 w-3.5", rebuilding && "animate-spin")} />
+        </button>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="rounded-lg bg-background/60 px-3 py-2 text-center">
+          <p className="text-lg font-bold leading-none">{profile.totalNotes}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">Notes</p>
+        </div>
+        <div className="rounded-lg bg-background/60 px-3 py-2 text-center">
+          <p className="text-lg font-bold leading-none">{profile.flashcardsReviewed}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">Cards reviewed</p>
+        </div>
+        <div className="rounded-lg bg-background/60 px-3 py-2 text-center">
+          <p className="text-lg font-bold leading-none">{profile.avgAccuracy !== null ? `${profile.avgAccuracy}%` : "—"}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">Accuracy</p>
+        </div>
+        <div className="rounded-lg bg-background/60 px-3 py-2 text-center">
+          <p className="text-lg font-bold leading-none">{profile.upcomingExams.length}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">Exams ahead</p>
+        </div>
+      </div>
+
+      {profile.upcomingExams.length > 0 && (
+        <div className="mt-3 space-y-1">
+          {profile.upcomingExams.slice(0, 2).map((exam) => {
+            const daysUntil = Math.ceil((new Date(exam.examDate).getTime() - Date.now()) / 86_400_000);
+            const urgency = daysUntil <= 3 ? "text-red-400" : daysUntil <= 7 ? "text-orange-400" : "text-muted-foreground";
+            return (
+              <div key={exam.examDate + exam.subject} className="flex items-center justify-between rounded-lg bg-background/40 px-3 py-1.5">
+                <p className="text-xs font-medium truncate">{exam.subject}</p>
+                <p className={cn("text-xs shrink-0 ml-2", urgency)}>
+                  {daysUntil <= 0 ? "Today!" : daysUntil === 1 ? "Tomorrow" : `${daysUntil}d`}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {profile.recentTopics.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {profile.recentTopics.slice(0, 4).map((topic) => (
+            <span key={topic} className="rounded-full bg-background/60 px-2 py-0.5 text-xs text-muted-foreground truncate max-w-[120px]">
+              {topic}
+            </span>
+          ))}
+        </div>
       )}
     </div>
   );
@@ -1292,6 +1391,9 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
   const [streak, setStreak]             = useState<StreakData | null>(null);
   const [milestoneToast, setMilestoneToast] = useState<string | null>(null);
 
+  // Student profile
+  const [studentProfile, setStudentProfile] = useState<StudentProfile | null>(null);
+
   // Notifications state
   interface Notification {
     id: string;
@@ -1426,7 +1528,7 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
   useEffect(() => {
     async function init() {
       try {
-        const [meRes, notesRes, groupsRes, examsRes, subRes, foldersRes, streaksRes, notifsRes, adminRes, plansRes, weakRes, dueRes, aiConvsRes] = await Promise.all([
+        const [meRes, notesRes, groupsRes, examsRes, subRes, foldersRes, streaksRes, notifsRes, adminRes, plansRes, weakRes, dueRes, aiConvsRes, profileRes] = await Promise.all([
           fetch("/api/auth/me"),
           fetch("/api/notes"),
           fetch("/api/groups"),
@@ -1440,6 +1542,7 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
           fetch("/api/flashcards/weak-areas"),
           fetch("/api/flashcards/due"),
           fetch("/api/ai/conversations"),
+          fetch("/api/profile"),
         ]);
 
         if (!meRes.ok) { router.replace("/login"); return; }
@@ -1510,6 +1613,11 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
         if (aiConvsRes.ok) {
           const j = await aiConvsRes.json() as { data?: { conversations: AiConversation[] } };
           if (Array.isArray(j.data?.conversations)) setAiConversations(j.data.conversations);
+        }
+
+        if (profileRes.ok) {
+          const j = await profileRes.json() as { data?: { profile: StudentProfile } };
+          if (j.data?.profile) setStudentProfile(j.data.profile);
         }
 
         if (!localStorage.getItem("studyhub_onboarding_complete")) {
@@ -2396,6 +2504,20 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
         {/* Streak widget */}
         {streak && <StreakWidget streak={streak} />}
 
+        {/* Student profile card */}
+        {studentProfile && studentProfile.profileCompleteness >= 40 && (
+          <ProfileCard
+            profile={studentProfile}
+            onRebuild={async () => {
+              const res = await fetch("/api/profile");
+              if (res.ok) {
+                const j = await res.json() as { data?: { profile: StudentProfile } };
+                if (j.data?.profile) setStudentProfile(j.data.profile);
+              }
+            }}
+          />
+        )}
+
         {/* Weak areas */}
         {weakAreas.length > 0 && (
           <div className="mb-4 rounded-xl border border-red-500/20 bg-red-500/5 p-4">
@@ -2830,6 +2952,7 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
             prefilledQuestion={prefilledQuestion}
             onClearPrefilledQuestion={() => setPrefilledQuestion(null)}
             onConversationsChange={setAiConversations}
+            studentProfile={studentProfile}
           />
         )}
 
@@ -3311,13 +3434,14 @@ function VersionHistorySlideOver({ note, versions, loading, preview, restoringVe
 // ---------------------------------------------------------------------------
 
 function AIAssistantTab({
-  notes, initialConversations, prefilledQuestion, onClearPrefilledQuestion, onConversationsChange,
+  notes, initialConversations, prefilledQuestion, onClearPrefilledQuestion, onConversationsChange, studentProfile,
 }: {
   notes: Note[];
   initialConversations: AiConversation[];
   prefilledQuestion: string | null;
   onClearPrefilledQuestion: () => void;
   onConversationsChange: (convs: AiConversation[]) => void;
+  studentProfile: StudentProfile | null;
 }) {
   const [conversations, setConversations] = useState<AiConversation[]>(initialConversations);
   const [activeConvId, setActiveConvId]   = useState<string | null>(null);
@@ -3449,6 +3573,27 @@ function AIAssistantTab({
     "Summarise what I need to study",
   ];
 
+  const greeting = (() => {
+    if (!studentProfile) return null;
+    const name = studentProfile.fullName ? `, ${studentProfile.fullName.split(" ")[0]}` : "";
+    if (studentProfile.upcomingExams.length > 0) {
+      const next = studentProfile.upcomingExams[0];
+      const daysUntil = Math.ceil((new Date(next.examDate).getTime() - Date.now()) / 86_400_000);
+      const timeStr = daysUntil <= 1 ? "tomorrow" : daysUntil <= 7 ? `in ${daysUntil} days` : `on ${new Date(next.examDate).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`;
+      return `Hi${name}! Your ${next.subject} exam is ${timeStr}. Ask me anything about it, or I can quiz you on your notes.`;
+    }
+    if (studentProfile.weakAreas.length > 0) {
+      return `Hi${name}! I noticed you're finding **${studentProfile.weakAreas[0].topic}** tricky. Want to work through it together?`;
+    }
+    if (studentProfile.currentStreak > 2) {
+      return `Hi${name}! You're on a ${studentProfile.currentStreak}-day streak — great work! What are we studying today?`;
+    }
+    if (studentProfile.recentTopics.length > 0) {
+      return `Hi${name}! Last time you were studying **${studentProfile.recentTopics[0]}**. Want to continue or start something new?`;
+    }
+    return null;
+  })();
+
   const hasContent = activeConvId !== null || messages.length > 0;
 
   return (
@@ -3502,7 +3647,13 @@ function AIAssistantTab({
                 <Bot className="h-8 w-8 text-accent" />
               </div>
               <h2 className="text-xl font-bold">StudyHub AI Assistant</h2>
-              <p className="text-sm text-muted-foreground">Ask me anything about your studies</p>
+              {greeting ? (
+                <p className="max-w-sm text-sm text-muted-foreground leading-relaxed">
+                  <ReactMarkdown>{greeting}</ReactMarkdown>
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground">Ask me anything about your studies</p>
+              )}
             </div>
             <div className="grid w-full max-w-md grid-cols-1 gap-2 sm:grid-cols-2">
               {SUGGESTIONS.map((s) => (

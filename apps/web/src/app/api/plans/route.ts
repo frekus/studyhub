@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createClient, requireUser } from "@/lib/supabase/server";
 import { ok, err, validationErr } from "@/lib/response";
 import { tryPublishStudyPlanGenerate } from "@/lib/queue";
+import { invalidateProfile } from "@/lib/student-profile";
 
 const CreatePlanSchema = z.object({
   title:    z.string().min(1).max(200),
@@ -90,6 +91,7 @@ export async function POST(request: Request) {
 
   const planRow = plan as Record<string, unknown>;
 
+  void invalidateProfile(user.id).catch(() => {});
   void tryPublishStudyPlanGenerate({
     planId:       planRow.id as string,
     userId:       user.id,
