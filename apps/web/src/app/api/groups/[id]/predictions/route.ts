@@ -17,15 +17,6 @@ export async function GET(_request: Request, { params }: { params: Params }) {
     .eq("group_id", id).eq("user_id", user.id).maybeSingle();
   if (!membership) return err("Access denied", 403);
 
-  // Rate limit: 5 prediction generations per user per day
-  const { rateLimit, rateLimitResponse } = await import("@/lib/rate-limit");
-  const { allowed, resetInSeconds } = await rateLimit(
-    `exam:predict:${user.id}`,
-    5,
-    24 * 60 * 60
-  );
-  if (!allowed) return rateLimitResponse(resetInSeconds, "You can generate 5 exam predictions per day.");
-
   const [{ data: uploads }, { data: predictions }] = await Promise.all([
     admin.from("group_exam_uploads").select("id, title, content, uploaded_by, created_at")
       .eq("group_id", id).order("created_at", { ascending: false }),
