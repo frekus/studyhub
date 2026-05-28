@@ -2075,7 +2075,7 @@ export default function GroupDetailPage() {
 
             {activeTab === "exam" && (
               <div className="w-full min-w-0 overflow-hidden">
-                <ExamPredictionsTab groupId={id} currentUserId={currentUserId} />
+                <ExamPredictionsTab groupId={id} currentUserId={currentUserId} members={members} />
               </div>
             )}
           </section>
