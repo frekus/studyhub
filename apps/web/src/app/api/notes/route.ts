@@ -5,6 +5,7 @@ import { cacheKeys, tryGet, trySet, tryDel, NOTE_TTL } from "@/lib/cache";
 import { tryPublishNoteSummarize } from "@/lib/queue";
 import { checkLimit, incrementUsage } from "@/lib/usage";
 import { recordStudyActivity } from "@/lib/streaks";
+import { invalidateProfile } from "@/lib/student-profile";
 import type { StudyNoteRow } from "@studyhub/database";
 
 const CreateNoteSchema = z.object({
@@ -45,6 +46,7 @@ export async function POST(request: Request) {
   await tryDel(cacheKeys.notesList(user.id));
 
   void recordStudyActivity(user.id, "note_created", supabase).catch(console.error);
+  void invalidateProfile(user.id).catch(() => {});
 
   void tryPublishNoteSummarize({
     noteId: note.id,

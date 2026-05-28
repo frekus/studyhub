@@ -479,25 +479,20 @@ function ViewNoteModal({ note, groupId, currentUserId, onClose }: {
 // SharedNoteCard
 // ---------------------------------------------------------------------------
 
-function SharedNoteCard({ note, currentUserId, onView, onStudy, isHighlighted }: {
+function SharedNoteCard({ note, onView, onStudy, isHighlighted }: {
   note: SharedNote;
-  currentUserId: string | null;
   onView: (note: SharedNote) => void;
   onStudy: (noteId: string, noteTitle: string) => Promise<void>;
   isHighlighted?: boolean;
 }) {
   const cardRef = useRef<HTMLDivElement>(null);
+  const [studyLoading, setStudyLoading] = useState(false);
 
   useEffect(() => {
     if (isHighlighted && cardRef.current) {
       cardRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
     }
   }, [isHighlighted]);
-
-
-  const [studyLoading, setStudyLoading] = useState(false);
-
-
 
   async function handleStudy() {
     setStudyLoading(true);
@@ -526,9 +521,7 @@ function SharedNoteCard({ note, currentUserId, onView, onStudy, isHighlighted }:
           <Loader2 className="h-3 w-3 animate-spin" />Summary generating…
         </p>
       )}
-
       <div className="mt-3 space-y-1.5">
-        {/* View — full width */}
         <button
           onClick={() => onView(note)}
           className="flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-lg border border-border py-2 text-sm text-muted-foreground transition-colors hover:border-accent hover:text-accent"
@@ -2040,7 +2033,7 @@ export default function GroupDetailPage() {
                   <div className="space-y-3">
                     {sharedNotes.map((sn) => (
                       <SharedNoteCard
-                        key={sn.id} note={sn} currentUserId={currentUserId}
+                        key={sn.id} note={sn}
                         onView={setViewNote} onStudy={openStudyMode}
                         isHighlighted={highlightedNoteId === sn.note_id}
                       />

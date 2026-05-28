@@ -2,23 +2,23 @@ services:
   # ---------------------------------------------------------------------------
   # Infrastructure
   # ---------------------------------------------------------------------------
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: studyhub
-      POSTGRES_PASSWORD: studyhub
-      POSTGRES_DB: studyhub
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - studyhub-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U studyhub"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
+  # postgres:
+  #   image: postgres:16-alpine
+  #   environment:
+  #     POSTGRES_USER: studyhub
+  #     POSTGRES_PASSWORD: studyhub
+  #     POSTGRES_DB: studyhub
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   networks:
+  #     - studyhub-network
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U studyhub"]
+  #     interval: 5s
+  #     timeout: 5s
+  #     retries: 10
 
   rabbitmq:
     image: rabbitmq:3-management-alpine
@@ -76,8 +76,8 @@ services:
       - NEXT_PUBLIC_SUPABASE_ANON_KEY
       - SUPABASE_SERVICE_ROLE_KEY
     depends_on:
-      postgres:
-        condition: service_healthy
+      # postgres:
+      #   condition: service_healthy
       redis:
         condition: service_healthy
       rabbitmq:
@@ -99,8 +99,8 @@ services:
       - SUPABASE_SERVICE_ROLE_KEY
       - ANTHROPIC_API_KEY
     depends_on:
-      postgres:
-        condition: service_healthy
+      # postgres:
+      #   condition: service_healthy
       redis:
         condition: service_healthy
       rabbitmq:
@@ -114,5 +114,5 @@ networks:
     driver: bridge
 
 volumes:
-  postgres_data:
+  # postgres_data:
   redis_data:
