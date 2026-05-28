@@ -1012,17 +1012,20 @@ function NewNoteDialog({ onCreated, open, onOpenChange, onLimitReached, folders,
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label htmlFor="note-content">Content</Label>
-              <label className="flex cursor-pointer items-center gap-1.5 text-xs text-accent hover:underline">
-                <Paperclip className="h-3.5 w-3.5" />
-                Upload document
-                <input
-                  type="file"
-                  className="hidden"
-                  accept=".txt,.pdf,.png,.jpg,.jpeg"
-                  onChange={handleFileUpload}
-                  disabled={extracting}
-                />
-              </label>
+              <div className="flex items-center gap-2">
+                <label className="flex cursor-pointer items-center gap-1.5 text-xs text-accent hover:underline">
+                  <Paperclip className="h-3.5 w-3.5" />
+                  Upload document
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept=".txt,.pdf,.png,.jpg,.jpeg"
+                    onChange={handleFileUpload}
+                    disabled={extracting}
+                  />
+                </label>
+                <span className="text-xs text-muted-foreground">· Max 10 MB · .pdf .txt .png .jpg</span>
+              </div>
             </div>
             {extracting && (
               <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
