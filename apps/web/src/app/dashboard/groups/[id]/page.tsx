@@ -1131,7 +1131,7 @@ function LeaderboardTab({ groupId, currentUserId }: { groupId: string; currentUs
 // ExamPredictionsTab
 // ---------------------------------------------------------------------------
 
-function ExamPredictionsTab({ groupId, currentUserId }: { groupId: string; currentUserId: string | null }) {
+function ExamPredictionsTab({ groupId, currentUserId, members }: { groupId: string; currentUserId: string | null; members: Member[] }) {
   const [uploads, setUploads] = useState<ExamUpload[]>([]);
   const [predictions, setPredictions] = useState<GroupPrediction[]>([]);
   const [activePrediction, setActivePrediction] = useState<GroupPrediction | null>(null);
@@ -1481,6 +1481,15 @@ function ExamPredictionsTab({ groupId, currentUserId }: { groupId: string; curre
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {pred.papers_count} paper{pred.papers_count !== 1 ? "s" : ""} · {new Date(pred.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
                     </p>
+                    {pred.created_by && (
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Created by: <span className="font-medium text-foreground">
+                          {pred.created_by === currentUserId
+                            ? "You"
+                            : members.find(m => m.user_id === pred.created_by)?.users?.full_name ?? "A member"}
+                        </span>
+                      </p>
+                    )}
                   </div>
                   <div className="flex gap-2 shrink-0 items-center">
                     {pred.status === "ready" && (
@@ -1493,16 +1502,18 @@ function ExamPredictionsTab({ groupId, currentUserId }: { groupId: string; curre
                         Retry
                       </Button>
                     )}
-                    <button
-                      onClick={() => void handleDeletePrediction(pred.id)}
-                      disabled={deletingPrediction === pred.id}
-                      className="rounded-lg p-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-40"
-                      title="Delete prediction"
-                    >
-                      {deletingPrediction === pred.id
-                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        : <Trash2 className="h-3.5 w-3.5" />}
-                    </button>
+                    {pred.created_by === currentUserId && (
+                      <button
+                        onClick={() => void handleDeletePrediction(pred.id)}
+                        disabled={deletingPrediction === pred.id}
+                        className="rounded-lg p-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-40"
+                        title="Delete prediction"
+                      >
+                        {deletingPrediction === pred.id
+                          ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          : <Trash2 className="h-3.5 w-3.5" />}
+                      </button>
+                    )}
                   </div>
                 </div>
                 {pred.status === "pending" && (
