@@ -184,7 +184,7 @@ export default function AccountPage() {
     if (deleteInput !== "DELETE") return;
     setDeleting(true);
     try {
-      const res = await fetch("/api/auth/account", { method: "DELETE" });
+      const res = await fetch("/api/account", { method: "DELETE" });
       if (res.ok) { router.push("/"); }
     } finally { setDeleting(false); }
   }
