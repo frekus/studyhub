@@ -472,7 +472,7 @@ export default function LandingPage() {
               </div>
               <p className="font-semibold">AI Summariser</p>
               <p className="mt-1 text-sm text-muted-foreground">Condenses any note into key bullet points in seconds.</p>
-              <Link href="/signup" className="mt-3 inline-flex items-center gap-1 text-xs text-orange-400 hover:underline">Try it <ArrowRight className="h-3 w-3" /></Link>
+              <Link href={isLoggedIn ? "/dashboard" : "/signup"} className="mt-3 inline-flex items-center gap-1 text-xs text-orange-400 hover:underline">Try it <ArrowRight className="h-3 w-3" /></Link>
             </div>
 
             {/* Flashcards */}
@@ -489,7 +489,7 @@ export default function LandingPage() {
               </div>
               <p className="font-semibold">Smart Flashcards</p>
               <p className="mt-1 text-sm text-muted-foreground">5 flashcards auto-generated from every note you create.</p>
-              <Link href="/signup" className="mt-3 inline-flex items-center gap-1 text-xs text-orange-400 hover:underline">Try it <ArrowRight className="h-3 w-3" /></Link>
+              <Link href={isLoggedIn ? "/dashboard" : "/signup"} className="mt-3 inline-flex items-center gap-1 text-xs text-orange-400 hover:underline">Try it <ArrowRight className="h-3 w-3" /></Link>
             </div>
 
             {/* Exam Predictions */}
@@ -503,7 +503,7 @@ export default function LandingPage() {
               </div>
               <p className="font-semibold">Exam Predictions</p>
               <p className="mt-1 text-sm text-muted-foreground">Upload past papers. AI predicts the most likely questions.</p>
-              <Link href="/signup" className="mt-3 inline-flex items-center gap-1 text-xs text-orange-400 hover:underline">Try it <ArrowRight className="h-3 w-3" /></Link>
+              <Link href={isLoggedIn ? "/dashboard" : "/signup"} className="mt-3 inline-flex items-center gap-1 text-xs text-orange-400 hover:underline">Try it <ArrowRight className="h-3 w-3" /></Link>
             </div>
 
             {/* Study Groups */}
@@ -519,7 +519,7 @@ export default function LandingPage() {
               </div>
               <p className="font-semibold">Study Groups</p>
               <p className="mt-1 text-sm text-muted-foreground">Create groups, invite classmates, and share notes together.</p>
-              <Link href="/signup" className="mt-3 inline-flex items-center gap-1 text-xs text-orange-400 hover:underline">Try it <ArrowRight className="h-3 w-3" /></Link>
+              <Link href={isLoggedIn ? "/dashboard" : "/signup"} className="mt-3 inline-flex items-center gap-1 text-xs text-orange-400 hover:underline">Try it <ArrowRight className="h-3 w-3" /></Link>
             </div>
 
             {/* Progress Tracking */}
@@ -537,7 +537,7 @@ export default function LandingPage() {
               </div>
               <p className="font-semibold">Progress Tracking</p>
               <p className="mt-1 text-sm text-muted-foreground">See study time, flashcard scores, and weak spots at a glance.</p>
-              <Link href="/signup" className="mt-3 inline-flex items-center gap-1 text-xs text-orange-400 hover:underline">Try it <ArrowRight className="h-3 w-3" /></Link>
+              <Link href={isLoggedIn ? "/dashboard" : "/signup"} className="mt-3 inline-flex items-center gap-1 text-xs text-orange-400 hover:underline">Try it <ArrowRight className="h-3 w-3" /></Link>
             </div>
 
             {/* Multi-format Upload */}
@@ -555,7 +555,7 @@ export default function LandingPage() {
               </div>
               <p className="font-semibold">Multi-format Upload</p>
               <p className="mt-1 text-sm text-muted-foreground">Upload PDF, PNG, JPG, or TXT files up to 10 MB each.</p>
-              <Link href="/signup" className="mt-3 inline-flex items-center gap-1 text-xs text-orange-400 hover:underline">Try it <ArrowRight className="h-3 w-3" /></Link>
+              <Link href={isLoggedIn ? "/dashboard" : "/signup"} className="mt-3 inline-flex items-center gap-1 text-xs text-orange-400 hover:underline">Try it <ArrowRight className="h-3 w-3" /></Link>
             </div>
 
           </div>

@@ -1275,6 +1275,7 @@ function ExamPredictionsTab({ groupId, currentUserId }: { groupId: string; curre
           members_count: 0,
           predictions: null,
           created_at: new Date().toISOString(),
+          created_by: currentUserId,
         };
         setPredictions((prev) => [newPred, ...prev]);
         startPolling(j.data.predictionId);
