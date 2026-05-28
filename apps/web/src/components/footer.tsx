@@ -1,34 +1,22 @@
 import Link from "next/link";
 import { BookOpen, ExternalLink, Globe, Mail } from "lucide-react";
 
-,
-  Legal: [
-    { label: "Privacy Policy", href: "/privacy" },
-    { label: "Contact",        href: "mailto:support@studyhubai.xyz" },
-  ],
-};mport Link from "next/link";
-import { BookOpen, ExternalLink, Globe, Mail } from "lucide-react";
-
 const LINKS = {
   Product: [
     { label: "Features",     href: "/#features" },
     { label: "Pricing",      href: "/pricing" },
     { label: "How It Works", href: "/#how-it-works" },
-    { label: "Changelog",    href: "#" },
   ],
   Resources: [
-    { label: "Documentation", href: "#" },
-    { label: "Blog",          href: "#" },
-    { label: "Support",       href: "#" },
-    { label: "FAQ",           href: "/#faq" },
+    { label: "Blog",         href: "#" },
+    { label: "Support",      href: "mailto:support@studyhubai.xyz" },
+    { label: "Status",       href: "#" },
   ],
-  Company: [
-    { label: "About Us",        href: "#" },
-    { label: "Careers",         href: "#" },
-    { label: "Privacy Policy",  href: "#" },
-    { label: "Terms of Service", href: "#" },
+  Legal: [
+    { label: "Privacy Policy", href: "/privacy" },
+    { label: "Contact",        href: "mailto:support@studyhubai.xyz" },
   ],
-} as const;
+};
 
 export function Footer() {
   return (
