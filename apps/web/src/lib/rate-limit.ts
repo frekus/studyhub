@@ -1,4 +1,4 @@
-import { redis } from "@studyhub/cache";
+import { redis as getRedis } from "@studyhub/cache";
 
 interface RateLimitResult {
   allowed: boolean;
@@ -23,7 +23,8 @@ export async function rateLimit(
 
   try {
     // Use Redis pipeline for atomic operations
-    const multi = redis.multi();
+    const client = getRedis();
+    const multi = client.multi();
     multi.zremrangebyscore(redisKey, 0, now - windowMs);  // Remove old entries
     multi.zadd(redisKey, now, `${now}-${Math.random()}`); // Add current request
     multi.zcard(redisKey);                                 // Count requests
