@@ -852,7 +852,7 @@ function NoteCard({ note, flashcardCount, folder, folders, onDelete, onStudy, on
           <Tooltip label="Edit note">
             <button
               onClick={() => onEdit(note)}
-              className="rounded p-1 text-muted-foreground opacity-0 transition-opacity duration-200 group-hover:opacity-100 hover:text-foreground"
+              className="rounded p-1 text-muted-foreground hover:text-foreground transition-colors"
               aria-label="Edit note"
             >
               <Pencil className="h-4 w-4" />
@@ -861,7 +861,7 @@ function NoteCard({ note, flashcardCount, folder, folders, onDelete, onStudy, on
           <Tooltip label="Version history">
             <button
               onClick={() => onHistory(note)}
-              className="rounded p-1 text-muted-foreground opacity-0 transition-opacity duration-200 group-hover:opacity-100 hover:text-foreground"
+              className="rounded p-1 text-muted-foreground hover:text-foreground transition-colors"
               aria-label="Version history"
             >
               <History className="h-4 w-4" />
@@ -870,7 +870,7 @@ function NoteCard({ note, flashcardCount, folder, folders, onDelete, onStudy, on
           <Tooltip label="Move to folder">
             <button
               onClick={() => onMove(note)}
-              className="rounded p-1 text-muted-foreground opacity-0 transition-opacity duration-200 group-hover:opacity-100 hover:text-foreground"
+              className="rounded p-1 text-muted-foreground hover:text-foreground transition-colors"
               aria-label="Move to folder"
             >
               <FolderInput className="h-4 w-4" />
