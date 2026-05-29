@@ -212,7 +212,7 @@ export default function SignupPage() {
             <Button
               type="submit"
               className="w-full"
-              disabled={loading || (password.length > 0 && strength.score < 3)}
+              disabled={loading}
             >
               {loading ? "Creating account…" : "Create free account"}
             </Button>
