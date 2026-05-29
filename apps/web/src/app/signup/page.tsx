@@ -19,9 +19,28 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  // Password strength
+  function getStrength(pw: string): { score: number; label: string; color: string; checks: Record<string, boolean> } {
+    const checks = {
+      length:    pw.length >= 8,
+      uppercase: /[A-Z]/.test(pw),
+      number:    /[0-9]/.test(pw),
+      special:   /[^A-Za-z0-9]/.test(pw),
+    };
+    const score = Object.values(checks).filter(Boolean).length;
+    const label = score <= 1 ? "Weak" : score === 2 ? "Fair" : score === 3 ? "Good" : "Strong";
+    const color = score <= 1 ? "bg-red-500" : score === 2 ? "bg-amber-500" : score === 3 ? "bg-blue-500" : "bg-green-500";
+    return { score, label, color, checks };
+  }
+  const strength = getStrength(password);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    // Client-side password validation
+    if (password.length < 8) { setError("Password must be at least 8 characters."); return; }
+    if (!/[A-Z]/.test(password)) { setError("Password must contain at least one uppercase letter."); return; }
+    if (!/[0-9]/.test(password)) { setError("Password must contain at least one number."); return; }
     setLoading(true);
 
     try {
@@ -156,13 +175,45 @@ export default function SignupPage() {
               </div>
             </div>
 
+              {/* Strength meter */}
+              {password.length > 0 && (
+                <div className="mt-2 space-y-1.5">
+                  <div className="flex gap-1">
+                    {[1,2,3,4].map((i) => (
+                      <div
+                        key={i}
+                        className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
+                          i <= strength.score ? strength.color : "bg-muted"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className={`text-xs font-medium ${
+                      strength.score <= 1 ? "text-red-500" :
+                      strength.score === 2 ? "text-amber-500" :
+                      strength.score === 3 ? "text-blue-500" : "text-green-500"
+                    }`}>{strength.label}</span>
+                    <div className="flex gap-2 text-xs text-muted-foreground">
+                      <span className={strength.checks.length    ? "text-green-500" : ""}>8+ chars</span>
+                      <span className={strength.checks.uppercase ? "text-green-500" : ""}>A-Z</span>
+                      <span className={strength.checks.number    ? "text-green-500" : ""}>0-9</span>
+                      <span className={strength.checks.special   ? "text-green-500" : ""}>!@#</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             {error && (
               <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
                 {error}
               </p>
             )}
 
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={loading || (password.length > 0 && strength.score < 3)}
+            >
               {loading ? "Creating account…" : "Create free account"}
             </Button>
           </form>
