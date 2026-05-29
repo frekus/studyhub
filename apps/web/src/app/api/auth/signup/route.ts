@@ -67,7 +67,10 @@ export async function POST(request: Request) {
     options: { data: { full_name } },
   });
 
-  if (authError) return err(friendlyAuthError(authError.message), 400);
+  if (authError) {
+    console.error("[signup] Supabase error:", authError.message);
+    return err(friendlyAuthError(authError.message), 400);
+  }
   if (!authData.user) return err("We could not create your account. Please try again.", 500);
 
   // Insert the public profile row
