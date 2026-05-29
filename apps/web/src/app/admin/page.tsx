@@ -1189,7 +1189,7 @@ function UsersTab({ onViewUser, onManage }: { onViewUser: (id: string) => void; 
       )}
 
       {activeTab === "users" && (
-      <>
+      <div>
       {/* Table */}
       <div className="rounded-xl border border-[#1a3330] overflow-hidden">
         {loading ? (
@@ -1271,7 +1271,7 @@ function UsersTab({ onViewUser, onManage }: { onViewUser: (id: string) => void; 
             <ChevronRight className="h-4 w-4" />
           </button>
         </div>
-      </>
+      </div>
       )}
     </div>
   );
