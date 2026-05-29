@@ -1189,6 +1189,7 @@ function UsersTab({ onViewUser, onManage }: { onViewUser: (id: string) => void; 
       )}
 
       {activeTab === "users" && (
+      <>
       {/* Table */}
       <div className="rounded-xl border border-[#1a3330] overflow-hidden">
         {loading ? (
