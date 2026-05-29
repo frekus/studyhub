@@ -1209,6 +1209,7 @@ function UsersTab({ onViewUser, onManage }: { onViewUser: (id: string) => void; 
           </button>
         </div>
       )}
+      </div>
     </div>
   );
 }
