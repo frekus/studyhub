@@ -235,10 +235,10 @@ function UserDetailSlideOver({ userId, onClose, onUpdated }: {
 }) {
   const [detail, setDetail]   = useState<UserDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<"users"|"referrals">("users");
   const [referralStats, setReferralStats] = useState<ReferralStats | null>(null);
   const [referrals, setReferrals] = useState<ReferralRow[]>([]);
   const [referralLoading, setReferralLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<"users"|"referrals">("users");
   const [editName, setEditName]   = useState(false);
   const [nameVal, setNameVal]     = useState("");
   const [savingName, setSavingName] = useState(false);
@@ -1085,46 +1085,23 @@ function UsersTab({ onViewUser, onManage }: { onViewUser: (id: string) => void; 
         </div>
       )}
 
-      {/* Referral / Users Tab switcher */}
+      {/* Tab switcher */}
       <div className="flex gap-2 border-b border-[#1a3330] mb-4">
-        <button
-          onClick={() => setActiveTab("users")}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "users"
-              ? "border-teal-500 text-teal-400"
-              : "border-transparent text-[#6b8f88] hover:text-white"
-          }`}
-        >
+        <button onClick={() => setActiveTab("users")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === "users" ? "border-teal-500 text-teal-400" : "border-transparent text-[#6b8f88] hover:text-white"}`}>
           Users
         </button>
-        <button
-          onClick={() => setActiveTab("referrals")}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "referrals"
-              ? "border-teal-500 text-teal-400"
-              : "border-transparent text-[#6b8f88] hover:text-white"
-          }`}
-        >
-          Referrals
-          {referralStats && referralStats.totalSignups > 0 && (
-            <span className="ml-1.5 rounded-full bg-teal-500/15 px-1.5 py-0.5 text-xs text-teal-400">
-              {referralStats.totalSignups}
-            </span>
-          )}
+        <button onClick={() => setActiveTab("referrals")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === "referrals" ? "border-teal-500 text-teal-400" : "border-transparent text-[#6b8f88] hover:text-white"}`}>
+          Referrals{referralStats && referralStats.totalSignups > 0 && <span className="ml-1.5 rounded-full bg-teal-500/15 px-1.5 py-0.5 text-xs text-teal-400">{referralStats.totalSignups}</span>}
         </button>
       </div>
 
-      {/* Referral stats + table */}
       {activeTab === "referrals" && (
         <div className="space-y-4">
           {referralStats && (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {[
-                { label: "Total Codes",     value: referralStats.totalCodes },
-                { label: "Total Sign-ups",  value: referralStats.totalSignups },
-                { label: "Subscribed",      value: referralStats.totalSubscribed },
-                { label: "Rewards Granted", value: referralStats.totalRewarded },
-              ].map(({ label, value }) => (
+              {([["Total Codes", referralStats.totalCodes], ["Sign-ups", referralStats.totalSignups], ["Subscribed", referralStats.totalSubscribed], ["Rewards", referralStats.totalRewarded]] as [string,number][]).map(([label, value]) => (
                 <div key={label} className="rounded-xl border border-[#1a3330] bg-[#071A18] p-4">
                   <p className="text-2xl font-bold text-white">{value}</p>
                   <p className="text-xs text-[#6b8f88] mt-1">{label}</p>
@@ -1134,9 +1111,7 @@ function UsersTab({ onViewUser, onManage }: { onViewUser: (id: string) => void; 
           )}
           <div className="rounded-xl border border-[#1a3330] overflow-hidden">
             {referralLoading ? (
-              <div className="flex items-center justify-center py-16">
-                <Loader2 className="h-6 w-6 animate-spin text-teal-500" />
-              </div>
+              <div className="flex items-center justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-teal-500" /></div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -1152,32 +1127,15 @@ function UsersTab({ onViewUser, onManage }: { onViewUser: (id: string) => void; 
                   </thead>
                   <tbody>
                     {referrals.length === 0 ? (
-                      <tr><td colSpan={6} className="px-4 py-8 text-center text-[#6b8f88] text-sm">No referrals yet</td></tr>
-                    ) : referrals
-                      .sort((a, b) => b.total_subscribed - a.total_subscribed)
-                      .map((r, i) => (
+                      <tr><td colSpan={6} className="px-4 py-8 text-center text-[#6b8f88]">No referrals yet</td></tr>
+                    ) : [...referrals].sort((a,b) => b.total_subscribed - a.total_subscribed).map((r,i) => (
                       <tr key={r.id} className="border-b border-[#1a3330] hover:bg-[#0a2420]">
-                        <td className="px-4 py-3 font-medium text-white">
-                          {i === 0 && r.total_subscribed > 0 && <span className="mr-1">🥇</span>}
-                          {i === 1 && r.total_subscribed > 0 && <span className="mr-1">🥈</span>}
-                          {i === 2 && r.total_subscribed > 0 && <span className="mr-1">🥉</span>}
-                          {r.referrer_name}
-                        </td>
+                        <td className="px-4 py-3 font-medium text-white">{i===0&&r.total_subscribed>0?"🥇 ":i===1&&r.total_subscribed>0?"🥈 ":i===2&&r.total_subscribed>0?"🥉 ":""}{r.referrer_name}</td>
                         <td className="px-4 py-3 font-mono text-xs text-teal-400 font-bold">{r.code}</td>
                         <td className="px-4 py-3 text-center text-white">{r.total_signups}</td>
-                        <td className="px-4 py-3 text-center">
-                          <span className={r.total_subscribed >= 10 ? "text-green-400 font-bold" : "text-white"}>
-                            {r.total_subscribed}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          {r.total_rewarded > 0
-                            ? <span className="text-orange-400 font-semibold">{r.total_rewarded} 🎁</span>
-                            : <span className="text-[#6b8f88]">—</span>}
-                        </td>
-                        <td className="px-4 py-3 text-xs text-[#6b8f88]">
-                          {new Date(r.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-                        </td>
+                        <td className="px-4 py-3 text-center"><span className={r.total_subscribed>=10?"text-green-400 font-bold":"text-white"}>{r.total_subscribed}</span></td>
+                        <td className="px-4 py-3 text-center">{r.total_rewarded>0?<span className="text-orange-400 font-semibold">{r.total_rewarded} 🎁</span>:<span className="text-[#6b8f88]">—</span>}</td>
+                        <td className="px-4 py-3 text-xs text-[#6b8f88]">{new Date(r.created_at).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1272,7 +1230,6 @@ function UsersTab({ onViewUser, onManage }: { onViewUser: (id: string) => void; 
           </button>
         </div>
       )}
-      </div>
     </div>
   );
 }
@@ -1296,10 +1253,6 @@ function Select({ value, onChange, options }: { value: string; onChange: (v: str
 function SubscriptionsTab({ stats }: { stats: Stats }) {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
-  const [referralStats, setReferralStats] = useState<ReferralStats | null>(null);
-  const [referrals, setReferrals] = useState<ReferralRow[]>([]);
-  const [referralLoading, setReferralLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<"users"|"referrals">("users");
   const [planFilter, setPlanFilter] = useState("popular");
 
   useEffect(() => {
@@ -1386,10 +1339,6 @@ function SubscriptionsTab({ stats }: { stats: Stats }) {
 function ActivityTab() {
   const [data, setData]     = useState<{ signups: ActivityItem[]; notes: ActivityItem[]; exams: ActivityItem[] } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [referralStats, setReferralStats] = useState<ReferralStats | null>(null);
-  const [referrals, setReferrals] = useState<ReferralRow[]>([]);
-  const [referralLoading, setReferralLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<"users"|"referrals">("users");
 
   const load = useCallback(async () => {
     const res = await fetch("/api/admin/activity");
@@ -1402,12 +1351,7 @@ function ActivityTab() {
     setReferralLoading(true);
     fetch("/api/admin/referrals")
       .then(r => r.json())
-      .then(j => {
-        if (j.data) {
-          setReferralStats(j.data.stats);
-          setReferrals(j.data.referrals);
-        }
-      })
+      .then(j => { if (j.data) { setReferralStats(j.data.stats); setReferrals(j.data.referrals); } })
       .catch(() => {})
       .finally(() => setReferralLoading(false));
   }, []);
@@ -1466,10 +1410,6 @@ const PRIVILEGE_PRESETS = [
 function AdminsTab({ currentUserId, isSuperAdmin }: { currentUserId: string; isSuperAdmin: boolean }) {
   const [admins, setAdmins]   = useState<AdminEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [referralStats, setReferralStats] = useState<ReferralStats | null>(null);
-  const [referrals, setReferrals] = useState<ReferralRow[]>([]);
-  const [referralLoading, setReferralLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<"users"|"referrals">("users");
   const [grantOpen, setGrantOpen] = useState(false);
   const [busy, setBusy]       = useState(false);
   const [editTarget, setEditTarget] = useState<AdminEntry | null>(null);
@@ -1988,6 +1928,7 @@ export default function AdminPage() {
         </main>
       </div>
 
+      </div>
       )}
 
       {/* User detail slide-over */}
