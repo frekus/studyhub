@@ -100,6 +100,14 @@ export default function AccountPage() {
   const [cancelSubOpen, setCancelSubOpen]   = useState(false);
   const [cancellingSub, setCancellingSub]   = useState(false);
   const [toast, setToast]                   = useState("");
+  // Referral
+  const [referralCode, setReferralCode]     = useState<string | null>(null);
+  const [referralStats, setReferralStats]   = useState<{
+    total: number; subscribed: number; rewarded: number;
+    progress: number; nextRewardAt: number;
+  } | null>(null);
+  const [referralLoading, setReferralLoading] = useState(false);
+  const [copied, setCopied]                 = useState(false);
   const toastTimer = useRef<NodeJS.Timeout | undefined>(undefined);
 
   function showToast(msg: string) {
@@ -137,9 +145,40 @@ export default function AccountPage() {
       }
 
       setLoading(false);
+
+      // Load referral code
+      setReferralLoading(true);
+      fetch("/api/referral")
+        .then(r => r.json())
+        .then(j => {
+          if (j.data?.code) {
+            setReferralCode(j.data.code);
+            setReferralStats(j.data.stats);
+          }
+        })
+        .catch(() => {})
+        .finally(() => setReferralLoading(false));
     }
     void load();
   }, [router]);
+
+  function handleCopyCode() {
+    if (!referralCode) return;
+    const link = `${window.location.origin}/signup?ref=${referralCode}`;
+    navigator.clipboard.writeText(link).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  function handleShareWhatsApp() {
+    if (!referralCode) return;
+    const link = `${window.location.origin}/signup?ref=${referralCode}`;
+    const msg = encodeURIComponent(
+      `Join me on StudyHub AI — the AI-powered study tool for Nigerian students! 🎓\n\nUse my referral link to sign up: ${link}`
+    );
+    window.open(`https://wa.me/?text=${msg}`, "_blank");
+  }
 
   async function handleSaveProfile(e: React.FormEvent) {
     e.preventDefault();
@@ -402,6 +441,98 @@ export default function AccountPage() {
               <Button variant="outline" size="sm" className="border-destructive/50 text-destructive hover:bg-destructive/10 hover:border-destructive" onClick={() => setDeleteOpen(true)}>
                 <AlertTriangle className="h-4 w-4" />Delete account
               </Button>
+            </div>
+          </div>
+        </Section>
+
+        {/* ── Referral Programme ── */}
+        <Section title="Referral Programme">
+          <div className="space-y-4">
+            <div className="rounded-xl border border-border/60 bg-gradient-to-br from-accent/10 to-accent/5 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold">Your Referral Link</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Share this link. Earn 1 month free Pro for every 10 friends who subscribe.
+                  </p>
+                </div>
+                <span className="shrink-0 rounded-full bg-accent/15 px-2.5 py-1 text-xs font-semibold text-accent">
+                  🎁 Earn rewards
+                </span>
+              </div>
+
+              {referralLoading ? (
+                <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+                  <Loader2 className="h-3 w-3 animate-spin" />Generating your code…
+                </div>
+              ) : referralCode ? (
+                <div className="mt-3 space-y-3">
+                  {/* Code display */}
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 rounded-lg border border-border bg-background px-3 py-2 font-mono text-sm font-bold tracking-widest text-accent">
+                      {referralCode}
+                    </div>
+                    <button
+                      onClick={handleCopyCode}
+                      className="shrink-0 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium transition-colors hover:bg-muted"
+                    >
+                      {copied ? "✅ Copied!" : "Copy link"}
+                    </button>
+                    <button
+                      onClick={handleShareWhatsApp}
+                      className="shrink-0 rounded-lg bg-green-500 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-green-600"
+                    >
+                      WhatsApp
+                    </button>
+                  </div>
+
+                  {/* Progress bar */}
+                  {referralStats && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-muted-foreground">
+                          Progress to next reward
+                        </span>
+                        <span className="font-semibold text-accent">
+                          {referralStats.progress}/{referralStats.nextRewardAt} subscribers
+                        </span>
+                      </div>
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-2 rounded-full bg-accent transition-all duration-500"
+                          style={{ width: `${(referralStats.progress / referralStats.nextRewardAt) * 100}%` }}
+                        />
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 pt-1">
+                        <div className="rounded-lg bg-muted/50 p-2 text-center">
+                          <p className="text-lg font-bold text-accent">{referralStats.total}</p>
+                          <p className="text-[10px] text-muted-foreground">Signed up</p>
+                        </div>
+                        <div className="rounded-lg bg-muted/50 p-2 text-center">
+                          <p className="text-lg font-bold text-green-500">{referralStats.subscribed}</p>
+                          <p className="text-[10px] text-muted-foreground">Subscribed</p>
+                        </div>
+                        <div className="rounded-lg bg-muted/50 p-2 text-center">
+                          <p className="text-lg font-bold text-orange-400">{referralStats.rewarded}</p>
+                          <p className="text-[10px] text-muted-foreground">Rewards earned</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="mt-2 text-xs text-destructive">Could not load referral code. Please refresh.</p>
+              )}
+            </div>
+
+            <div className="rounded-xl border border-border/60 bg-muted/30 p-3">
+              <p className="text-xs font-semibold mb-2">How it works</p>
+              <ol className="space-y-1.5 text-xs text-muted-foreground">
+                <li>1. Share your unique referral link with friends</li>
+                <li>2. They sign up using your link</li>
+                <li>3. When 10 of them subscribe to any paid plan</li>
+                <li>4. You automatically get <span className="font-semibold text-accent">1 month free Pro</span> 🎉</li>
+              </ol>
             </div>
           </div>
         </Section>

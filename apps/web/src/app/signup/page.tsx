@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { BookOpen, Brain, Zap, TrendingUp, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,13 @@ import { Footer } from "@/components/footer";
 
 export default function SignupPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const [refCode, setRefCode] = useState("");
+
+  useEffect(() => {
+    const ref = searchParams.get("ref");
+    if (ref) setRefCode(ref.toUpperCase());
+  }, [searchParams]);
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -55,6 +62,15 @@ export default function SignupPage() {
       if (!res.ok) {
         setError(json.error ?? "Signup failed");
         return;
+      }
+
+      // Redeem referral code if provided
+      if (refCode.trim()) {
+        await fetch("/api/referral/redeem", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code: refCode.trim() }),
+        }).catch(() => {}); // Non-fatal
       }
 
       router.push("/dashboard");
@@ -203,6 +219,24 @@ export default function SignupPage() {
                   </div>
                 </div>
               )}
+            {/* Referral code field */}
+            <div className="space-y-2">
+              <Label htmlFor="refCode">
+                Referral code{" "}
+                <span className="text-xs text-muted-foreground font-normal">(optional)</span>
+              </Label>
+              <Input
+                id="refCode"
+                type="text"
+                placeholder="e.g. ABCD1234"
+                value={refCode}
+                onChange={(e) => setRefCode(e.target.value.toUpperCase())}
+                maxLength={8}
+                className="font-mono tracking-widest uppercase"
+                autoComplete="off"
+              />
+            </div>
+
             {error && (
               <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
                 {error}
