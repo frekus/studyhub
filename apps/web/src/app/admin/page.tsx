@@ -1232,6 +1232,8 @@ function UsersTab({ onViewUser, onManage }: { onViewUser: (id: string) => void; 
       )}
       </div>
       )}
+      </div>
+      )}
     </div>
   );
 }
@@ -1929,9 +1931,6 @@ export default function AdminPage() {
           {activeTab === "settings" && <SettingsTab adminEmail={adminEmail} />}
         </main>
       </div>
-
-      </div>
-      )}
 
       {/* User detail slide-over */}
       {detailUserId && (
