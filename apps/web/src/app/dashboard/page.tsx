@@ -30,7 +30,6 @@ import {
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { AvatarDropdown } from "@/components/avatar-dropdown";
-import { EmptyState } from "@/components/ui/EmptyState";
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
@@ -2745,20 +2744,16 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
                     : notes.filter((n) => n.folder_id === selectedFolderId);
 
                   if (filtered.length === 0) {
-                    return selectedFolderId ? (
-                      <EmptyState
-                        icon={<BookOpen className="h-6 w-6" />}
-                        title="No notes in this folder"
-                        description="Move an existing note here or create a new one inside this folder."
-                        actions={[{ label: "New note →", onClick: () => setShowNoteModal(true) }]}
-                      />
-                    ) : (
-                      <EmptyState
-                        icon={<BookOpen className="h-6 w-6" />}
-                        title="No study notes yet"
-                        description="Notes power everything — flashcards, AI summaries, and exam predictions all start here."
-                        actions={[{ label: "Create your first note →", onClick: () => setShowNoteModal(true) }]}
-                      />
+                    return (
+                      <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-16 text-center">
+                        <BookOpen className="mb-3 h-10 w-10 text-muted-foreground" />
+                        <p className="font-medium">
+                          {selectedFolderId ? "No notes in this folder" : "No study notes yet"}
+                        </p>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {selectedFolderId ? "Move notes here or create a new one" : "Create your first note to get started"}
+                        </p>
+                      </div>
                     );
                   }
 
@@ -2818,15 +2813,11 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
               </div>
             </div>
             {groups.length === 0 ? (
-              <EmptyState
-                icon={<Users className="h-6 w-6" />}
-                title="No study groups yet"
-                description="Study with coursemates — share notes, run live sessions, and track the leaderboard."
-                actions={[
-                  { label: "Create a group →", onClick: () => setShowCreateGroup(true) },
-                  { label: "Join with code", onClick: () => setShowJoinGroup(true), variant: "secondary" },
-                ]}
-              />
+              <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-16 text-center">
+                <Users className="mb-3 h-10 w-10 text-muted-foreground" />
+                <p className="font-medium">No study groups yet</p>
+                <p className="mt-1 text-sm text-muted-foreground">Create a group or join one with an invite ID</p>
+              </div>
             ) : (
               <div className="space-y-4">
                 {groups.map((group) => <GroupCard key={group.id} group={group} />)}
@@ -2913,12 +2904,11 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
                 {exams.length === 0 ? "No exams yet" : `${exams.length} exam${exams.length === 1 ? "" : "s"}`}
               </h2>
               {exams.length === 0 ? (
-                <EmptyState
-                  icon={<GraduationCap className="h-6 w-6" />}
-                  title="No predictions yet"
-                  description="Upload a past-questions PDF above and AI will predict likely questions for your exam."
-                  actions={[{ label: "Upload a PDF →", onClick: () => document.getElementById("exam-file")?.click() }]}
-                />
+                <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-16 text-center">
+                  <GraduationCap className="mb-3 h-10 w-10 text-muted-foreground" />
+                  <p className="font-medium">No exams uploaded yet</p>
+                  <p className="mt-1 text-sm text-muted-foreground">Upload a past exam to get AI-predicted questions</p>
+                </div>
               ) : (
                 <div className="space-y-4">
                   {exams.map((exam) => (
@@ -3141,12 +3131,11 @@ function PlannerTab({
       </div>
 
       {plans.length === 0 && !createPlanOpen ? (
-        <EmptyState
-          icon={<Calendar className="h-6 w-6" />}
-          title="No study plans yet"
-          description="Pick an exam date and your notes — AI builds you a day-by-day study schedule automatically."
-          actions={[{ label: "Create a study plan →", onClick: onCreatePlanOpen }]}
-        />
+        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-16 text-center">
+          <Calendar className="mb-3 h-10 w-10 text-muted-foreground" />
+          <p className="font-medium">No study plans yet</p>
+          <p className="mt-1 text-sm text-muted-foreground">Create a plan to get a day-by-day study schedule</p>
+        </div>
       ) : (
         <div className="space-y-4">
           {plans.map((plan) => {
