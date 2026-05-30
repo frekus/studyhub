@@ -1,6 +1,13 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SupabaseClient = any;
 
+// Nigeria WAT is UTC+1 — always use this instead of toISOString().split("T")[0]
+function todayWAT(): string {
+  const now = new Date();
+  now.setMinutes(now.getMinutes() + now.getTimezoneOffset() + 60); // shift to UTC+1
+  return now.toISOString().split("T")[0];
+}
+
 export type ActivityType = "note_created" | "flashcard_reviewed" | "exam_uploaded";
 
 const ACTIVITY_COLUMN: Record<ActivityType, string> = {
@@ -14,7 +21,7 @@ export async function recordStudyActivity(
   activityType: ActivityType,
   supabase: SupabaseClient,
 ): Promise<void> {
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayWAT();
   const column = ACTIVITY_COLUMN[activityType];
 
   await supabase.rpc("increment_activity", {
@@ -37,10 +44,10 @@ export async function updateStreak(
     .eq("user_id", userId)
     .single();
 
-  const todayDate = new Date(today);
+  const todayDate = new Date(today + "T12:00:00+01:00");
   const yesterday = new Date(todayDate);
   yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayStr = yesterday.toISOString().split("T")[0];
+  const yesterdayStr = yesterday.toISOString().split("T")[0].slice(0, 10);
 
   if (!streak) {
     await supabase.from("study_streaks").insert({

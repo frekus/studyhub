@@ -6,12 +6,11 @@ export async function GET() {
   const { user, authErr } = await requireUser(supabase);
   if (authErr) return authErr;
 
-  const today = new Date().toISOString().split("T")[0];
+  function watDate(daysAgo = 0): string { const now = new Date(); now.setMinutes(now.getMinutes() + now.getTimezoneOffset() + 60); now.setDate(now.getDate() - daysAgo); return now.toISOString().split("T")[0]; }
+  const today = watDate();
+  const fromDate = watDate(29);
 
   // Fetch streak + last 30 days of activity in parallel
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29);
-  const fromDate = thirtyDaysAgo.toISOString().split("T")[0];
 
   const [{ data: streak }, { data: activityRows }] = await Promise.all([
     supabase
@@ -38,9 +37,7 @@ export async function GET() {
 
   const activity: { date: string; count: number }[] = [];
   for (let i = 29; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    const dateStr = d.toISOString().split("T")[0];
+    const dateStr = watDate(i);
     activity.push({ date: dateStr, count: activityMap[dateStr] ?? 0 });
   }
 
