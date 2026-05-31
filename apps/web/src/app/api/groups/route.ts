@@ -26,9 +26,11 @@ export async function POST(request: Request) {
 
   const admin = createAdminClient();
 
+  // Generate a short unique invite code
+  const inviteCode = Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 8);
   const { data: group, error: groupErr } = await admin
     .from("study_groups")
-    .insert({ name: parsed.data.name, created_by: user.id })
+    .insert({ name: parsed.data.name, created_by: user.id, invite_code: inviteCode })
     .select()
     .single();
 
