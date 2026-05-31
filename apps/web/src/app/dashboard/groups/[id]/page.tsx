@@ -1754,6 +1754,14 @@ export default function GroupDetailPage() {
     if (res.ok) setMembers((prev) => prev.filter((m) => m.user_id !== userId));
   }
 
+  async function handleRemoveAndBlock(userId: string, name: string) {
+    if (!confirm(`Remove ${name} and block them from rejoining via invite link?`)) return;
+    const res = await fetch(`/api/groups/${id}/members/${userId}?block=true`, {
+      method: "DELETE", credentials: "include",
+    });
+    if (res.ok) setMembers((prev) => prev.filter((m) => m.user_id !== userId));
+  }
+
   async function handleLeave() {
     setLeaving(true);
     try {
@@ -1927,12 +1935,22 @@ export default function GroupDetailPage() {
                       </div>
                     </div>
                     {m.role !== "owner" && (
-                      <button
-                        onClick={() => void handleRemoveMember(m.user_id, m.users?.full_name ?? "this member")}
-                        className="rounded-md border border-destructive/30 px-2.5 py-1 text-xs text-destructive transition-colors hover:bg-destructive/10"
-                      >
-                        Remove
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => void handleRemoveMember(m.user_id, m.users?.full_name ?? "this member")}
+                          className="rounded-md border border-destructive/30 px-2.5 py-1 text-xs text-destructive transition-colors hover:bg-destructive/10"
+                          title="Remove from group (can rejoin via invite)"
+                        >
+                          Remove
+                        </button>
+                        <button
+                          onClick={() => void handleRemoveAndBlock(m.user_id, m.users?.full_name ?? "this member")}
+                          className="rounded-md border border-destructive/50 bg-destructive/10 px-2.5 py-1 text-xs text-destructive transition-colors hover:bg-destructive/20"
+                          title="Remove and block from rejoining via invite link"
+                        >
+                          Remove & Block
+                        </button>
+                      </div>
                     )}
                   </div>
                 ))}

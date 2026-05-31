@@ -4,12 +4,13 @@ import { ok, err } from "@/lib/response";
 
 type Params = Promise<{ id: string; userId: string }>;
 
-export async function DELETE(_request: Request, { params }: { params: Params }) {
+export async function DELETE(request: Request, { params }: { params: Params }) {
   const { id: groupId, userId: targetUserId } = await params;
   const supabase = await createClient();
   const { user, authErr } = await requireUser(supabase);
   if (authErr) return authErr;
 
+  const shouldBlock = new URL(request.url).searchParams.get("block") === "true";
   const admin = createAdminClient();
 
   // Caller must be the group owner
@@ -26,8 +27,17 @@ export async function DELETE(_request: Request, { params }: { params: Params }) 
     .delete()
     .eq("group_id", groupId)
     .eq("user_id", targetUserId);
-
   if (error) return err(error.message, 500);
+
+  // Only block if explicitly requested via Remove & Block action
+  if (shouldBlock) {
+    await admin
+      .from("group_blocked_members")
+      .upsert(
+        { group_id: groupId, user_id: targetUserId, blocked_by: user.id },
+        { onConflict: "group_id,user_id" }
+      );
+  }
 
   return ok({ success: true });
 }
