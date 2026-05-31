@@ -71,7 +71,7 @@ export async function POST(_request: Request, { params }: { params: Params }) {
   }
 
   const rows = cards.map(c => ({
-    note_id: noteId,
+    note_id: noteId,        // reuse note_id field for compatibility
     group_note_id: noteId,
     user_id: user.id,
     question: c.question,

@@ -13,6 +13,38 @@ const UpdateSchema = z.object({
   message: "At least one field required",
 });
 
+export async function GET(_request: Request, { params }: { params: Params }) {
+  const { id, noteId } = await params;
+  const supabase = await createClient();
+  const { user, authErr } = await requireUser(supabase);
+  if (authErr) return authErr;
+
+  const admin = createAdminClient();
+  const { data: membership } = await admin
+    .from("study_group_members").select("id")
+    .eq("group_id", id).eq("user_id", user.id).maybeSingle();
+  if (!membership) return err("Access denied", 403);
+
+  const { data: note, error } = await admin
+    .from("group_notes").select("*")
+    .eq("id", noteId).eq("group_id", id).maybeSingle();
+  if (error || !note) return err("Note not found", 404);
+
+  // Resolve names
+  const userIds = [...new Set([note.created_by, note.last_edited_by].filter(Boolean) as string[])];
+  let nameMap: Record<string, string> = {};
+  if (userIds.length > 0) {
+    const { data: profiles } = await admin.from("users").select("id, full_name").in("id", userIds);
+    nameMap = Object.fromEntries((profiles ?? []).map((p) => [p.id, p.full_name ?? "Unknown"]));
+  }
+
+  return ok({ note: {
+    ...note,
+    creator_name: nameMap[note.created_by] ?? "Unknown",
+    last_editor_name: note.last_edited_by ? (nameMap[note.last_edited_by] ?? "Unknown") : null,
+  }});
+}
+
 export async function PATCH(request: Request, { params }: { params: Params }) {
   const { id, noteId } = await params;
   const supabase = await createClient();

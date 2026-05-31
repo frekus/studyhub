@@ -648,15 +648,17 @@ function GroupNotesTab({ groupId, currentUserId, isOwner }: {
       setTitle(""); setContent(""); setCreateOpen(false);
       if (!newNote.ai_summary) {
         const pollId = setInterval(async () => {
-          const r = await fetch(`/api/groups/${groupId}/group-notes/${newNote.id}`);
-          const pj = await r.json() as { data?: { note: GroupNote } };
-          const updated = pj.data?.note;
-          if (updated?.ai_summary) {
-            setNotes((prev) => prev.map((n) => n.id === newNote.id ? updated : n));
-            clearInterval(pollId);
-          }
+          try {
+            const r = await fetch(`/api/groups/${groupId}/group-notes/${newNote.id}`);
+            const pj = await r.json();
+            const updated = pj.data?.note;
+            if (updated?.ai_summary) {
+              setNotes((prev) => prev.map((n) => n.id === newNote.id ? { ...updated, creator_name: n.creator_name } : n));
+              clearInterval(pollId);
+            }
+          } catch { /* ignore */ }
         }, 3000);
-        setTimeout(() => clearInterval(pollId), 60000);
+        setTimeout(() => clearInterval(pollId), 90000);
       }
     }
     setCreating(false);
@@ -902,7 +904,7 @@ function GroupNotesTab({ groupId, currentUserId, isOwner }: {
 
               {/* AI Summary */}
               {n.ai_summary ? (
-                <p className="mt-2 rounded-md bg-accent/10 px-3 py-1.5 text-sm text-accent break-words line-clamp-3">{n.ai_summary}</p>
+                <p className="mt-2 rounded-md bg-accent/10 px-3 py-1.5 text-sm text-accent break-words">{n.ai_summary}</p>
               ) : (
                 <p className="mt-2 flex items-center gap-1.5 text-xs italic text-muted-foreground">
                   <Loader2 className="h-3 w-3 animate-spin" />Generating AI summary…
