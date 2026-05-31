@@ -302,7 +302,7 @@ export default function AccountPage() {
                       // Also trigger storage event for cross-tab support
                       localStorage.setItem("avatar_url", j.data!.avatar_url);
                       localStorage.removeItem("avatar_url");
-                    } catch (e) { console.error("[avatar upload]", e); showToast("Upload failed"); }
+                    } catch { showToast("Upload failed"); }
                     finally { setAvatarUploading(false); e.target.value = ""; }
                   }}
                 />
