@@ -124,6 +124,7 @@ const FAQS = [
 export default function LandingPage() {
   const [isLoggedIn, setIsLoggedIn]     = useState(false);
   const [userEmail, setUserEmail]       = useState("");
+  const [avatarUrl, setAvatarUrl]       = useState<string | null>(null);
   const [isAdmin, setIsAdmin]           = useState(false);
   const [mobileOpen, setMobileOpen]     = useState(false);
   const [billing, setBilling]           = useState<BillingCycle>("monthly");
@@ -134,10 +135,11 @@ export default function LandingPage() {
   useEffect(() => {
     fetch("/api/auth/me", { credentials: "include" })
       .then((r) => r.json())
-      .then((data: { data?: { user?: { id?: string; email?: string } } }) => {
+      .then((data: { data?: { user?: { id?: string; email?: string; avatar_url?: string | null } } }) => {
         if (data?.data?.user?.id) {
           setIsLoggedIn(true);
           setUserEmail(data.data.user.email ?? "");
+          setAvatarUrl(data.data.user.avatar_url ?? null);
           fetch("/api/admin/check", { credentials: "include" })
             .then((r) => r.json())
             .then((d: { data?: { isAdmin?: boolean } }) => { if (d?.data?.isAdmin) setIsAdmin(true); })
@@ -225,7 +227,7 @@ export default function LandingPage() {
                 <Button variant="outline" size="sm" asChild>
                   <Link href="/dashboard">Dashboard</Link>
                 </Button>
-                <AvatarDropdown email={userEmail} isAdmin={isAdmin} />
+                <AvatarDropdown email={userEmail} isAdmin={isAdmin} avatarUrl={avatarUrl} />
               </>
             ) : (
               <>
@@ -242,7 +244,7 @@ export default function LandingPage() {
           {/* Mobile right */}
           <div className="flex items-center gap-2 lg:hidden">
             <ThemeToggle />
-            {isLoggedIn && <AvatarDropdown email={userEmail} />}
+            {isLoggedIn && <AvatarDropdown email={userEmail} avatarUrl={avatarUrl} />}
             <button
               onClick={() => setMobileOpen((v) => !v)}
               className="rounded-md p-2 text-muted-foreground hover:text-foreground"
