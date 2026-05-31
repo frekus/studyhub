@@ -15,6 +15,7 @@ export async function POST(
 
   const admin = createAdminClient();
 
+  // Find group by invite code
   const { data: group, error: groupErr } = await admin
     .from("study_groups")
     .select("id, name")
@@ -23,6 +24,17 @@ export async function POST(
 
   if (groupErr || !group) return err("Invalid or expired invite link", 404);
 
+  // Check if user has been blocked from this group
+  const { data: blocked } = await admin
+    .from("group_blocked_members")
+    .select("id")
+    .eq("group_id", group.id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (blocked) return err("You have been removed from this group and cannot rejoin via invite link.", 403);
+
+  // Check if already a member
   const { data: existing } = await admin
     .from("study_group_members")
     .select("id")
@@ -34,6 +46,7 @@ export async function POST(
     return ok({ group: { name: group.name }, message: "Already a member" });
   }
 
+  // Add as member
   const { error: joinErr } = await admin
     .from("study_group_members")
     .insert({ group_id: group.id, user_id: user.id, role: "member" });
