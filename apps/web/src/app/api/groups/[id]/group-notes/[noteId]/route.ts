@@ -22,7 +22,7 @@ export async function PATCH(request: Request, { params }: { params: Params }) {
   const admin = createAdminClient();
 
   const { data: existing } = await admin
-    .from("group_notes").select("id, group_id, content")
+    .from("group_notes").select("id, group_id, title, content")
     .eq("id", noteId).eq("group_id", id).maybeSingle();
   if (!existing) return err("Note not found", 404);
 
@@ -30,6 +30,18 @@ export async function PATCH(request: Request, { params }: { params: Params }) {
   try { body = await request.json(); } catch { return err("Invalid JSON", 400); }
   const parsed = UpdateSchema.safeParse(body);
   if (!parsed.success) return validationErr(parsed.error);
+
+  // Save current state as version before updating
+  const { data: latest } = await admin.from("group_note_versions")
+    .select("version_number").eq("group_note_id", noteId)
+    .order("version_number", { ascending: false }).limit(1).maybeSingle();
+  const nextVersion = (latest?.version_number ?? 0) + 1;
+  await admin.from("group_note_versions").insert({
+    group_note_id: noteId, group_id: id,
+    version_number: nextVersion,
+    title: existing.title ?? "", content: existing.content,
+    edited_by: user.id,
+  });
 
   const { data: note, error } = await admin
     .from("group_notes")
