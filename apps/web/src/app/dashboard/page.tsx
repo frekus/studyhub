@@ -3601,7 +3601,7 @@ function AIAssistantTab({
   const hasContent = activeConvId !== null || messages.length > 0;
 
   return (
-    <div className="flex h-[calc(100vh-220px)] min-h-[500px] overflow-hidden rounded-xl border border-border bg-card">
+    <div className="flex h-[calc(100vh-280px)] min-h-[480px] sm:h-[calc(100vh-220px)] sm:min-h-[500px] overflow-hidden rounded-xl border border-border bg-card">
       {/* Left panel — conversation list */}
       <div className="hidden w-60 shrink-0 flex-col border-r border-border sm:flex">
         <div className="shrink-0 border-b border-border p-3">
@@ -3643,7 +3643,7 @@ function AIAssistantTab({
       </div>
 
       {/* Right panel — chat area */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col min-h-0">
         {!hasContent ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-6 p-6">
             <div className="flex flex-col items-center gap-3 text-center">
@@ -3669,7 +3669,7 @@ function AIAssistantTab({
             </div>
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
             {convLoading ? (
               <div className="flex justify-center py-12">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
