@@ -2,43 +2,57 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { BookOpen, Loader2, Users, CheckCircle, XCircle } from "lucide-react";
+import { BookOpen, Loader2, CheckCircle, XCircle } from "lucide-react";
 import Link from "next/link";
 
 export default function JoinGroupPage() {
-  const router  = useRouter();
-  const params  = useParams();
-  const code    = params?.code as string;
+  const router = useRouter();
+  const params = useParams();
+  const code   = params?.code as string;
 
-  const [status, setStatus]   = useState<"loading" | "joining" | "success" | "error" | "auth">("loading");
-  const [message, setMessage] = useState("");
+  const [status, setStatus]       = useState<"loading" | "joining" | "success" | "error">("loading");
+  const [message, setMessage]     = useState("");
   const [groupName, setGroupName] = useState("");
 
   useEffect(() => {
-    if (!code) return;
-    // Check if user is logged in
-    fetch("/api/auth/me", { credentials: "include" })
-      .then(r => r.json())
-      .then(async (data: { data?: { user?: { id?: string } } }) => {
-        if (!data?.data?.user?.id) {
-          // Not logged in — redirect to login with return URL
+    if (!code) { setStatus("error"); setMessage("Invalid invite link"); return; }
+
+    async function join() {
+      try {
+        // Check auth
+        const meRes  = await fetch("/api/auth/me", { credentials: "include" });
+        const meJson = await meRes.json() as { data?: { user?: { id?: string } } };
+
+        if (!meJson?.data?.user?.id) {
           router.replace(`/login?redirect=/join/${code}`);
           return;
         }
-        // Logged in — attempt to join
+
         setStatus("joining");
-        const res = await fetch(`/api/groups/join/${code}`, { method: "POST", credentials: "include" });
-        const json = await res.json() as { data?: { group?: { name: string }; message?: string }; error?: string };
+
+        const res  = await fetch(`/api/groups/join/${code}`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+        });
+        const json = await res.json() as { data?: { group?: { name: string } }; error?: string };
+
         if (res.ok) {
           setGroupName(json.data?.group?.name ?? "the group");
           setStatus("success");
-          setTimeout(() => router.replace("/dashboard?tab=groups"), 2000);
+          setTimeout(() => router.replace("/dashboard?tab=groups"), 2500);
         } else {
           setMessage(json.error ?? "Failed to join group");
           setStatus("error");
         }
-      })
-      .catch(() => { setMessage("Network error"); setStatus("error"); });
+      } catch (e) {
+        console.error("[join page]", e);
+        setMessage("Network error — please try again");
+        setStatus("error");
+      }
+    }
+
+    void join();
   }, [code, router]);
 
   return (
@@ -51,7 +65,7 @@ export default function JoinGroupPage() {
 
         {(status === "loading" || status === "joining") && (
           <>
-            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-accent/10 mx-auto">
+            <div className="mb-4 mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-accent/10">
               <Loader2 className="h-7 w-7 animate-spin text-accent" />
             </div>
             <p className="font-semibold">
@@ -63,7 +77,7 @@ export default function JoinGroupPage() {
 
         {status === "success" && (
           <>
-            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-green-500/10 mx-auto">
+            <div className="mb-4 mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-green-500/10">
               <CheckCircle className="h-7 w-7 text-green-500" />
             </div>
             <p className="font-semibold">You joined {groupName}!</p>
@@ -73,10 +87,10 @@ export default function JoinGroupPage() {
 
         {status === "error" && (
           <>
-            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10 mx-auto">
+            <div className="mb-4 mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10">
               <XCircle className="h-7 w-7 text-destructive" />
             </div>
-            <p className="font-semibold">Couldn't join group</p>
+            <p className="font-semibold">Couldn&apos;t join group</p>
             <p className="mt-2 text-sm text-muted-foreground">{message}</p>
             <Link
               href="/dashboard?tab=groups"
