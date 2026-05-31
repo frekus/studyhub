@@ -2182,7 +2182,6 @@ export default function GroupDetailPage() {
             <p className="mt-1 text-sm text-muted-foreground">{members.length} member{members.length === 1 ? "" : "s"}</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <InviteDialog groupId={group.id} />
             <ShareNoteDialog groupId={group.id} myNotes={myNotes} members={members} onShared={handleNoteShared} />
             {isOwner && (
               <Button variant="outline" size="sm" onClick={() => setShowGroupSettings(true)}>
