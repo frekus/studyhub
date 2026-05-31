@@ -1,4 +1,5 @@
 import { createAdminClient } from "@studyhub/database";
+import VoyageAI from "voyageai";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyClient = any;
@@ -23,16 +24,30 @@ interface UniversityProfile {
   department_context: string;
 }
 
-function pseudoEmbedding(text: string): number[] {
-  const vec = new Array(1536).fill(0);
-  for (let i = 0; i < text.length; i++) {
-    const idx = (text.charCodeAt(i) * (i + 1)) % 1536;
-    vec[idx] = (vec[idx] + text.charCodeAt(i) / 127) % 1;
+// ---------------------------------------------------------------------------
+// Voyage AI embedding (1024 dims, voyage-2 model)
+// ---------------------------------------------------------------------------
+let voyageClient: InstanceType<typeof VoyageAI> | null = null;
+
+function getVoyageClient() {
+  if (!voyageClient) {
+    voyageClient = new VoyageAI({ apiKey: process.env.VOYAGE_API_KEY ?? "" });
   }
-  const mag = Math.sqrt(vec.reduce((s: number, v: number) => s + v * v, 0)) || 1;
-  return vec.map((v: number) => v / mag);
+  return voyageClient;
 }
 
+export async function getEmbedding(text: string): Promise<number[]> {
+  const client = getVoyageClient();
+  const response = await client.embed({
+    input: text,
+    model: "voyage-2",
+  });
+  return response.data[0].embedding as number[];
+}
+
+// ---------------------------------------------------------------------------
+// Subject detection
+// ---------------------------------------------------------------------------
 const SUBJECT_KEYWORDS: Record<string, string[]> = {
   "English Language": ["english", "grammar", "essay", "comprehension", "vocabulary", "oral english", "summary", "letter writing"],
   "Mathematics":      ["maths", "mathematics", "algebra", "geometry", "calculus", "statistics", "trigonometry", "quadratic", "matrix", "indices"],
@@ -50,6 +65,9 @@ export function detectSubject(message: string): string | null {
   return null;
 }
 
+// ---------------------------------------------------------------------------
+// University detection
+// ---------------------------------------------------------------------------
 const UNIVERSITY_KEYWORDS: Record<string, string> = {
   "unilag": "UNILAG", "university of lagos": "UNILAG",
   "ui ": "UI", "university of ibadan": "UI",
@@ -69,37 +87,52 @@ export function detectUniversity(message: string): string | null {
   return null;
 }
 
+// ---------------------------------------------------------------------------
+// Fetch similar past questions via Voyage embedding + pgvector
+// ---------------------------------------------------------------------------
 export async function fetchSimilarQuestions(
   message: string,
   subject: string | null,
   limit = 3
 ): Promise<PastQuestion[]> {
   const admin = createAdminClient() as AnyClient;
-  const embedding = pseudoEmbedding(`${subject ?? ""} ${message}`);
 
+  let embedding: number[];
   try {
-    const { data, error } = await admin.rpc("match_past_questions", {
-      query_embedding: JSON.stringify(embedding),
-      match_subject:   subject,
-      match_count:     limit,
-    });
-
-    if (error || !data) {
-      const query = admin
-        .from("past_questions")
-        .select("exam_board, subject, year, topic, question_text, answer_text, difficulty")
-        .limit(limit);
-      if (subject) query.eq("subject", subject);
-      const { data: fallback } = await query;
-      return (fallback ?? []) as PastQuestion[];
-    }
-
-    return (data ?? []) as PastQuestion[];
+    embedding = await getEmbedding(`${subject ?? ""} ${message}`);
   } catch {
-    return [];
+    // Fallback to text search if Voyage fails
+    const query = admin
+      .from("past_questions")
+      .select("exam_board, subject, year, topic, question_text, answer_text, difficulty")
+      .limit(limit);
+    if (subject) query.eq("subject", subject);
+    const { data } = await query;
+    return (data ?? []) as PastQuestion[];
   }
+
+  const { data, error } = await admin.rpc("match_past_questions", {
+    query_embedding: JSON.stringify(embedding),
+    match_subject:   subject,
+    match_count:     limit,
+  });
+
+  if (error || !data) {
+    const query = admin
+      .from("past_questions")
+      .select("exam_board, subject, year, topic, question_text, answer_text, difficulty")
+      .limit(limit);
+    if (subject) query.eq("subject", subject);
+    const { data: fallback } = await query;
+    return (fallback ?? []) as PastQuestion[];
+  }
+
+  return (data ?? []) as PastQuestion[];
 }
 
+// ---------------------------------------------------------------------------
+// Fetch university profile
+// ---------------------------------------------------------------------------
 export async function fetchUniversityProfile(
   university: string,
   department?: string | null
@@ -125,6 +158,9 @@ export async function fetchUniversityProfile(
   return data?.[0] as UniversityProfile ?? null;
 }
 
+// ---------------------------------------------------------------------------
+// Build full RAG context for injection into system prompt
+// ---------------------------------------------------------------------------
 export async function buildRAGContext(
   message: string,
   profile?: { preferredSubjects?: string[] }
@@ -136,7 +172,11 @@ export async function buildRAGContext(
     subject = detectSubject(profile.preferredSubjects[0]) ?? profile.preferredSubjects[0];
   }
 
-  const questions = await fetchSimilarQuestions(message, subject, 3);
+  const [questions, university] = await Promise.all([
+    fetchSimilarQuestions(message, subject, 3),
+    Promise.resolve(detectUniversity(message)),
+  ]);
+
   if (questions.length > 0) {
     const qLines = questions.map(q =>
       `**${q.exam_board} ${q.subject} ${q.year} — ${q.topic}** (${q.difficulty})\nQ: ${q.question_text}\nA: ${q.answer_text}`
@@ -144,7 +184,6 @@ export async function buildRAGContext(
     contextParts.push(`## Relevant Past Questions\n${qLines}`);
   }
 
-  const university = detectUniversity(message);
   if (university) {
     const uniProfile = await fetchUniversityProfile(university);
     if (uniProfile) {
