@@ -925,7 +925,19 @@ function NoteCard({ note, flashcardCount, folder, folders, onDelete, onStudy, on
           <Loader2 className="h-3 w-3 animate-spin" />Generating summary…
         </p>
       )}
-      {expanded && <p className="mt-3 whitespace-pre-wrap text-sm text-muted-foreground">{note.content}</p>}
+      {expanded && (
+        <div className="mt-3 rounded-md border border-border/40 bg-muted/30 px-4 py-3 text-sm text-muted-foreground leading-relaxed prose prose-sm prose-invert max-w-none
+          [&>p]:mb-2 [&>p:last-child]:mb-0
+          [&>ul]:list-disc [&>ul]:pl-5 [&>ul]:mb-2
+          [&>ol]:list-decimal [&>ol]:pl-5 [&>ol]:mb-2
+          [&>li]:mb-1
+          [&>h1]:text-base [&>h1]:font-semibold [&>h1]:mb-1
+          [&>h2]:text-sm [&>h2]:font-semibold [&>h2]:mb-1
+          [&>h3]:text-sm [&>h3]:font-medium [&>h3]:mb-1
+          [&>strong]:text-foreground [&>blockquote]:border-l-2 [&>blockquote]:border-accent [&>blockquote]:pl-3 [&>blockquote]:italic">
+          <ReactMarkdown>{note.content ?? ""}</ReactMarkdown>
+        </div>
+      )}
     </div>
     </>
   );
@@ -1183,7 +1195,7 @@ function PredictionCard({ prediction, onAskAI }: { prediction: Prediction; onAsk
 
   return (
     <div className="rounded-lg border border-border bg-card p-4">
-      <p className="font-medium leading-snug">{prediction.question}</p>
+      <div className="font-medium leading-relaxed text-sm [&>p]:mb-1 [&>p:last-child]:mb-0"><ReactMarkdown>{prediction.question}</ReactMarkdown></div>
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs text-muted-foreground">
           {prediction.topic}
@@ -1211,9 +1223,9 @@ function PredictionCard({ prediction, onAskAI }: { prediction: Prediction; onAsk
         )}
       </div>
       {expanded && (
-        <p className="mt-2 rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground leading-relaxed">
-          {prediction.explanation}
-        </p>
+        <div className="mt-2 rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground leading-relaxed [&>p]:mb-1 [&>p:last-child]:mb-0 [&>ul]:list-disc [&>ul]:pl-4 [&>li]:mb-0.5">
+          <ReactMarkdown>{prediction.explanation}</ReactMarkdown>
+        </div>
       )}
     </div>
   );
@@ -1328,6 +1340,30 @@ function ExamCard({ exam, onDelete, onAskAI }: { exam: Exam; onDelete: (id: stri
 function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams" | "planner" | "ai" }) {
   const router       = useRouter();
   const [user, setUser]           = useState<User | null>(null);
+
+  // Listen for avatar updates from account page (same tab via storage event)
+  useEffect(() => {
+    function handleAvatarUpdate(e: StorageEvent) {
+      if (e.key === "avatar_url" && e.newValue) {
+        setUser(prev => prev ? { ...prev, avatarUrl: e.newValue } : prev);
+      }
+    }
+    // BroadcastChannel for same-tab updates
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel("studyhub_avatar");
+      bc.onmessage = (e: MessageEvent<{ avatar_url: string }>) => {
+        if (e.data?.avatar_url) {
+          setUser(prev => prev ? { ...prev, avatarUrl: e.data.avatar_url } : prev);
+        }
+      };
+    } catch { /* BroadcastChannel not supported */ }
+    window.addEventListener("storage", handleAvatarUpdate);
+    return () => {
+      window.removeEventListener("storage", handleAvatarUpdate);
+      bc?.close();
+    };
+  }, []);
   const [notes, setNotes]         = useState<Note[]>([]);
   const [groups, setGroups]       = useState<Group[]>([]);
   const [exams, setExams]         = useState<Exam[]>([]);
@@ -1553,6 +1589,10 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
 
         const meJson = await meRes.json() as { data?: { user?: { id: string; email: string; avatar_url?: string | null } } };
         setUser({ id: meJson.data?.user?.id ?? "", email: meJson.data?.user?.email ?? "", avatarUrl: meJson.data?.user?.avatar_url ?? null });
+        // Store in sessionStorage so avatar updates broadcast to this tab
+        if (meJson.data?.user?.avatar_url) {
+          sessionStorage.setItem("avatar_url", meJson.data.user.avatar_url);
+        }
 
         if (notesRes.ok) {
           const j = await notesRes.json() as { data?: { notes: Note[] } };

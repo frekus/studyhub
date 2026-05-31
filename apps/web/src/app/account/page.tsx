@@ -293,6 +293,15 @@ export default function AccountPage() {
                       if (!res.ok) { showToast(j.error ?? "Upload failed"); return; }
                       setAvatarUrl(j.data!.avatar_url);
                       showToast("Avatar updated!");
+                      // Broadcast to dashboard so nav avatar updates instantly
+                      try {
+                        const bc = new BroadcastChannel("studyhub_avatar");
+                        bc.postMessage({ avatar_url: j.data!.avatar_url });
+                        bc.close();
+                      } catch { /* fallback */ }
+                      // Also trigger storage event for cross-tab support
+                      localStorage.setItem("avatar_url", j.data!.avatar_url);
+                      localStorage.removeItem("avatar_url");
                     } catch { showToast("Upload failed"); }
                     finally { setAvatarUploading(false); e.target.value = ""; }
                   }}
