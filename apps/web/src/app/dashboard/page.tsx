@@ -3639,7 +3639,7 @@ function AIAssistantTab({
   const hasContent = activeConvId !== null || messages.length > 0;
 
   return (
-    <div className="flex h-[calc(100vh-110px)] sm:h-[calc(100vh-160px)] overflow-hidden rounded-xl border border-border bg-card">
+    <div className="flex h-[calc(100dvh-110px)] sm:h-[calc(100vh-220px)] sm:min-h-[500px] overflow-hidden rounded-xl border border-border bg-card">
       {/* Left panel — conversation list */}
       <div className="hidden w-60 shrink-0 flex-col border-r border-border sm:flex">
         <div className="shrink-0 border-b border-border p-3">
