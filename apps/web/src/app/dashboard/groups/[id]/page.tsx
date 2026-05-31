@@ -728,11 +728,7 @@ function GroupNotesTab({ groupId, currentUserId, isOwner }: {
 
   return (
     <div className="space-y-4 w-full min-w-0">
-      <div className="flex justify-center mb-3">
-        <Button size="sm" onClick={() => setCreateOpen(true)} className="gap-2">
-          <PlusCircle className="h-4 w-4" />Group Note
-        </Button>
-      </div>
+
 
       {/* Create Modal */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
@@ -859,7 +855,7 @@ function GroupNotesTab({ groupId, currentUserId, isOwner }: {
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-12 text-center">
           <BookOpen className="mb-3 h-8 w-8 text-muted-foreground" />
           <p className="text-sm font-medium">No group notes yet</p>
-          <p className="mt-1 text-xs text-muted-foreground">Create a shared note for the whole group</p>
+          <p className="mt-1 text-xs text-muted-foreground">Create a shared note the whole group can edit</p>
           <Button size="sm" className="mt-3 gap-2" onClick={() => setCreateOpen(true)}>
             <PlusCircle className="h-4 w-4" />Create first note
           </Button>
