@@ -927,8 +927,7 @@ function GroupNotesTab({ groupId, currentUserId, isOwner }: {
               {/* Expanded content */}
               {expandedNotes.has(n.id) && n.content && (
                 <div className="mt-3 rounded-md border border-border/40 bg-muted/30 px-4 py-3 text-sm text-muted-foreground leading-relaxed space-y-2">
-                  {n.content.split(/
-{2,}/).map((para, i) => (
+                  {n.content.split(/\n{2,}/).map((para, i) => (
                     para.trim() ? <ReactMarkdown key={i} className="[&>p]:mb-0">{para.trim()}</ReactMarkdown> : null
                   ))}
                 </div>
