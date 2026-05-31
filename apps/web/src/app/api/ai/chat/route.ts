@@ -4,6 +4,8 @@ import { createClient, requireUser } from "@/lib/supabase/server";
 import { createAdminClient } from "@studyhub/database";
 import { ok, err, validationErr } from "@/lib/response";
 import { getOrBuildProfile, buildPersonalisedSystemPrompt } from "@/lib/student-profile";
+import { NIGERIAN_CURRICULUM_CONTEXT, NIGERIAN_CURRICULUM_CONTEXT_SLIM, detectNigerianContext } from "@/lib/nigerian-curriculum";
+import { buildRAGContext } from "@/lib/rag";
 
 export const maxDuration = 60;
 
@@ -91,20 +93,28 @@ export async function POST(request: Request) {
 
   const profile = await getOrBuildProfile(user.id).catch(() => null);
   let systemPrompt = profile
-    ? buildPersonalisedSystemPrompt(profile)
-    : `You are StudyHub AI, an expert study assistant helping students understand their study material and prepare for exams.
+    ? buildPersonalisedSystemPrompt(profile, message)
+    : `You are StudyHub AI, an expert study assistant for Nigerian university and secondary school students. You have deep knowledge of WAEC, JAMB (UTME), NECO, and Nigerian university courses.
 
 Be concise, clear, and educational. Use examples where helpful.
 Format responses with clear structure using markdown.
 
 When answering exam questions:
-- Give a comprehensive answer
+- Give a comprehensive answer aligned with Nigerian exam marking schemes
 - Explain the key concepts
-- Mention what examiners typically look for
-- Keep answers exam-appropriate`;
+- Mention what WAEC/JAMB/NECO examiners typically look for
+- Keep answers exam-appropriate
+${detectNigerianContext(message) ? NIGERIAN_CURRICULUM_CONTEXT : NIGERIAN_CURRICULUM_CONTEXT_SLIM}`;
+
+  // Build RAG context from past questions + university profiles
+  const ragContext = await buildRAGContext(message, profile ?? undefined).catch(() => "");
 
   if (noteContext) {
     systemPrompt = `Use the following student notes as reference:\n---\n${noteContext.slice(0, 8000)}\n---\n\n${systemPrompt}`;
+  }
+
+  if (ragContext) {
+    systemPrompt = systemPrompt + ragContext;
   }
 
   const userMessage = examQuestion

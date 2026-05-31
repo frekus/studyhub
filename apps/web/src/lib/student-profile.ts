@@ -1,4 +1,5 @@
 import { createAdminClient } from "@studyhub/database";
+import { NIGERIAN_CURRICULUM_CONTEXT, NIGERIAN_CURRICULUM_CONTEXT_SLIM, detectNigerianContext } from "@/lib/nigerian-curriculum";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyClient = any;
@@ -158,7 +159,7 @@ export async function invalidateProfile(userId: string): Promise<void> {
 // System prompt builder
 // ---------------------------------------------------------------------------
 
-export function buildPersonalisedSystemPrompt(profile: StudentProfile): string {
+export function buildPersonalisedSystemPrompt(profile: StudentProfile, message?: string): string {
   const parts: string[] = [];
 
   if (profile.fullName) {
@@ -193,16 +194,18 @@ export function buildPersonalisedSystemPrompt(profile: StudentProfile): string {
     ? `\n\n## Student Profile\n${parts.join(" ")}\n\nUse this context to personalise your responses — reference their subjects, upcoming exams, and weak areas where relevant. Address the student by name when appropriate.`
     : "";
 
-  return `You are StudyHub AI, an expert study assistant helping students understand their study material and prepare for exams.
+  return `You are StudyHub AI, an expert study assistant for Nigerian university and secondary school students. You have deep knowledge of WAEC, JAMB (UTME), NECO, and Nigerian university courses.
 
 Be concise, clear, and educational. Use examples where helpful.
 Format responses with clear structure using markdown.
 
 When answering exam questions:
-- Give a comprehensive answer
+- Give a comprehensive answer aligned with Nigerian exam marking schemes
 - Explain the key concepts
-- Mention what examiners typically look for
-- Keep answers exam-appropriate${studentContext}`;
+- Mention what WAEC/JAMB/NECO examiners typically look for
+- Reference the relevant exam board where applicable
+- Keep answers exam-appropriate${studentContext}
+${detectNigerianContext(message ?? "", profile) ? NIGERIAN_CURRICULUM_CONTEXT : NIGERIAN_CURRICULUM_CONTEXT_SLIM}`;
 }
 
 // ---------------------------------------------------------------------------
