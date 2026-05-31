@@ -340,6 +340,7 @@ export default function AccountPage() {
             <div>
               <p className="font-medium">{fullName || email}</p>
               <p className="mt-0.5 text-xs text-muted-foreground">Click the icon to update your photo</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">JPEG, PNG, WebP or GIF · Max 2MB</p>
             </div>
           </div>
 
