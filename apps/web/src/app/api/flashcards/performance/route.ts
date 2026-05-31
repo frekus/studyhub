@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createClient, requireUser } from "@/lib/supabase/server";
 import { ok, err, validationErr } from "@/lib/response";
 import { invalidateProfile } from "@/lib/student-profile";
+import { recordStudyActivity } from "@/lib/streaks";
 
 const Schema = z.object({
   flashcardId: z.string().uuid(),
@@ -95,5 +96,6 @@ export async function POST(request: Request) {
   }
 
   void invalidateProfile(user.id).catch(() => {});
+  void recordStudyActivity(user.id, "flashcard_reviewed", supabase).catch(console.error);
   return ok({ success: true });
 }
