@@ -9,9 +9,10 @@ interface Props {
   email: string;
   plan?: string;
   isAdmin?: boolean;
+  avatarUrl?: string | null;
 }
 
-export function AvatarDropdown({ email, plan, isAdmin }: Props) {
+export function AvatarDropdown({ email, plan, isAdmin, avatarUrl }: Props) {
   const [open, setOpen]             = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const containerRef                = useRef<HTMLDivElement>(null);
@@ -44,9 +45,11 @@ export function AvatarDropdown({ email, plan, isAdmin }: Props) {
         onClick={() => setOpen((v) => !v)}
         aria-label="Account menu"
         aria-expanded={open}
-        className="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-sm font-medium text-accent-foreground ring-2 ring-transparent transition-all hover:ring-accent/40 focus-visible:outline-none focus-visible:ring-accent/40"
+        className="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-sm font-medium text-accent-foreground ring-2 ring-transparent transition-all hover:ring-accent/40 focus-visible:outline-none focus-visible:ring-accent/40 overflow-hidden"
       >
-        {initial}
+        {avatarUrl
+          ? <img src={avatarUrl} alt={initial} className="h-8 w-8 object-cover" />
+          : initial}
       </button>
 
       {open && (

@@ -167,6 +167,7 @@ interface AiMessage {
 interface User {
   id: string;
   email: string;
+  avatarUrl?: string | null;
 }
 
 interface UsageStat { used: number; limit: number }
@@ -1550,8 +1551,8 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
 
         if (!meRes.ok) { router.replace("/login"); return; }
 
-        const meJson = await meRes.json() as { data?: { user?: { id: string; email: string } } };
-        setUser({ id: meJson.data?.user?.id ?? "", email: meJson.data?.user?.email ?? "" });
+        const meJson = await meRes.json() as { data?: { user?: { id: string; email: string; avatar_url?: string | null } } };
+        setUser({ id: meJson.data?.user?.id ?? "", email: meJson.data?.user?.email ?? "", avatarUrl: meJson.data?.user?.avatar_url ?? null });
 
         if (notesRes.ok) {
           const j = await notesRes.json() as { data?: { notes: Note[] } };
@@ -2460,7 +2461,7 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
                 <HelpCircle className="h-4 w-4" />
               </Button>
             </Tooltip>
-            <AvatarDropdown email={user?.email ?? ""} plan={subscription?.tier} isAdmin={isAdmin} />
+            <AvatarDropdown email={user?.email ?? ""} plan={subscription?.tier} isAdmin={isAdmin} avatarUrl={user?.avatarUrl} />
           </div>
         </div>
       </header>
