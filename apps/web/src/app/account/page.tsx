@@ -307,6 +307,30 @@ export default function AccountPage() {
                   }}
                 />
               </label>
+              {avatarUrl && !avatarUploading && (
+                <button
+                  onClick={async () => {
+                    setAvatarUploading(true);
+                    try {
+                      const res = await fetch("/api/auth/avatar", { method: "DELETE" });
+                      const j = await res.json() as { error?: string };
+                      if (!res.ok) { showToast(j.error ?? "Remove failed"); return; }
+                      setAvatarUrl(null);
+                      showToast("Avatar removed");
+                      try {
+                        const bc = new BroadcastChannel("studyhub_avatar");
+                        bc.postMessage({ avatar_url: null });
+                        bc.close();
+                      } catch { /* ignore */ }
+                    } catch { showToast("Remove failed"); }
+                    finally { setAvatarUploading(false); }
+                  }}
+                  className="absolute -top-0.5 -right-0.5 flex h-5 w-5 cursor-pointer items-center justify-center rounded-full bg-destructive text-white shadow-sm hover:opacity-80"
+                  title="Remove photo"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              )}
               {avatarUploading && (
                 <div className="absolute inset-0 flex items-center justify-center rounded-full bg-background/60">
                   <svg className="h-5 w-5 animate-spin text-accent" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>

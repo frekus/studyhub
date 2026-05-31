@@ -19,7 +19,20 @@ async function extractPdfText(buffer: Buffer): Promise<string> {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const pdfParse = require("pdf-parse");
     const data = await pdfParse(buffer, { max: 0 });
-    return (data.text ?? "").replace(/\s+/g, " ").trim();
+    const raw = data.text ?? "";
+    // Preserve paragraph breaks — collapse only within-line whitespace
+    // 1. Normalise Windows line endings
+    // 2. Collapse 3+ newlines to double newline (paragraph break)
+    // 3. Collapse multiple spaces/tabs on a single line to one space
+    // 4. Trim each line
+    const cleaned = raw
+      .replace(/\r\n/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .split("\n")
+      .map((line: string) => line.replace(/[ \t]+/g, " ").trim())
+      .join("\n")
+      .trim();
+    return cleaned;
   } catch {
     return "";
   }

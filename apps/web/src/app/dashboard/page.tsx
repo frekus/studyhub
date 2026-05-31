@@ -926,16 +926,14 @@ function NoteCard({ note, flashcardCount, folder, folders, onDelete, onStudy, on
         </p>
       )}
       {expanded && (
-        <div className="mt-3 rounded-md border border-border/40 bg-muted/30 px-4 py-3 text-sm text-muted-foreground leading-relaxed prose prose-sm prose-invert max-w-none
-          [&>p]:mb-2 [&>p:last-child]:mb-0
-          [&>ul]:list-disc [&>ul]:pl-5 [&>ul]:mb-2
-          [&>ol]:list-decimal [&>ol]:pl-5 [&>ol]:mb-2
-          [&>li]:mb-1
-          [&>h1]:text-base [&>h1]:font-semibold [&>h1]:mb-1
-          [&>h2]:text-sm [&>h2]:font-semibold [&>h2]:mb-1
-          [&>h3]:text-sm [&>h3]:font-medium [&>h3]:mb-1
-          [&>strong]:text-foreground [&>blockquote]:border-l-2 [&>blockquote]:border-accent [&>blockquote]:pl-3 [&>blockquote]:italic">
-          <ReactMarkdown>{note.content ?? ""}</ReactMarkdown>
+        <div className="mt-3 rounded-md border border-border/40 bg-muted/30 px-4 py-3 text-sm text-muted-foreground leading-relaxed space-y-2">
+          {(note.content ?? "").split(/\n{2,}/).map((para, i) => (
+            para.trim() ? (
+              <ReactMarkdown key={i} className="[&>p]:mb-0 [&>ul]:list-disc [&>ul]:pl-5 [&>ol]:list-decimal [&>ol]:pl-5 [&>li]:mb-0.5 [&>h1]:text-base [&>h1]:font-semibold [&>h2]:text-sm [&>h2]:font-semibold [&>h3]:text-sm [&>h3]:font-medium [&>strong]:text-foreground [&>blockquote]:border-l-2 [&>blockquote]:border-accent [&>blockquote]:pl-3 [&>blockquote]:italic">
+                {para.trim()}
+              </ReactMarkdown>
+            ) : null
+          ))}
         </div>
       )}
     </div>
@@ -1352,8 +1350,8 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
     let bc: BroadcastChannel | null = null;
     try {
       bc = new BroadcastChannel("studyhub_avatar");
-      bc.onmessage = (e: MessageEvent<{ avatar_url: string }>) => {
-        if (e.data?.avatar_url) {
+      bc.onmessage = (e: MessageEvent<{ avatar_url: string | null }>) => {
+        if (e.data && "avatar_url" in e.data) {
           setUser(prev => prev ? { ...prev, avatarUrl: e.data.avatar_url } : prev);
         }
       };
