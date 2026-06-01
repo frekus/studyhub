@@ -12,11 +12,13 @@ export async function GET(_request: Request, { params }: { params: Params }) {
 
   const admin = createAdminClient();
 
+  // Verify user is a member of this group (any role can view, owner can unblock)
   const { data: membership } = await admin
     .from("study_group_members").select("role")
     .eq("group_id", id).eq("user_id", user.id).maybeSingle();
-  if (membership?.role !== "owner") return err("Only the group owner can view blocked members", 403);
+  if (!membership) return err("Access denied", 403);
 
+  console.log("[blocked-members] group:", id, "user:", user.id, "role:", membership?.role);
   const { data: blocked, error } = await admin
     .from("group_blocked_members")
     .select("id, user_id, blocked_at")
