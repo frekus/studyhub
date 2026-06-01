@@ -33,7 +33,7 @@ export async function POST(request: Request, { params }: { params: Params }) {
   // Build insert payload — use group_note_id for group notes to avoid FK violation
   const insertPayload: Record<string, unknown> = {
     group_id:   id,
-    created_by: user.id,
+    host_id: user.id,
     note_title: parsed.data.noteTitle,
     is_active:  true,
   };

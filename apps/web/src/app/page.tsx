@@ -382,21 +382,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── STATS BAR ── */}
-      <section className="border-y border-border/60 bg-muted/20 px-6 py-10">
-        <div className="mx-auto grid max-w-4xl grid-cols-2 gap-6 md:grid-cols-4">
-          {[
-            { value: "10,000+",   label: "Students" },
-            { value: "500,000+",  label: "Notes Created" },
-            { value: "2M+",       label: "Flashcards Generated" },
-            { value: "98%",       label: "Pass Rate Improvement" },
-          ].map(({ value, label }) => (
-            <div key={label} className="text-center">
-              <p className="text-3xl font-bold text-orange-400">{value}</p>
-              <p className="mt-1 text-sm text-muted-foreground">{label}</p>
-            </div>
-          ))}
-        </div>
-      </section>
+
 
       {/* ── CHALLENGES ── */}
       <section className="px-6 py-20">
