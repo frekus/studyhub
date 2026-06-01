@@ -2153,9 +2153,8 @@ export default function GroupDetailPage() {
             </section>
 
             {/* Blocked Members */}
-            {isOwner && (
-              <section>
-                <h3 className="mb-3 text-sm font-semibold">Blocked Members ({blockedMembers.length})</h3>
+            <section>
+              <h3 className="mb-3 text-sm font-semibold">Blocked Members ({blockedMembers.length})</h3>
                 {loadingBlocked ? (
                   <div className="flex justify-center py-4"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>
                 ) : blockedMembers.length === 0 ? (
