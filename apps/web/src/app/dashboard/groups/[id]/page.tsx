@@ -595,6 +595,10 @@ function GroupNotesTab({ groupId, currentUserId, isOwner }: {
   const [expandedNotes, setExpandedNotes]   = useState<Set<string>>(new Set());
   const [flashcardCounts, setFlashcardCounts] = useState<Record<string, number>>({});
   const [generatingCards, setGeneratingCards] = useState<string | null>(null);
+  const [viewingCards, setViewingCards]         = useState<{noteId:string;noteTitle:string} | null>(null);
+  const [viewCards, setViewCards]               = useState<{id:string;question:string;answer:string}[]>([]);
+  const [viewCardsLoading, setViewCardsLoading] = useState(false);
+  const [flippedCard, setFlippedCard]           = useState<string | null>(null);
   // Version history state
   const [versionNote, setVersionNote]       = useState<GroupNote | null>(null);
   const [versions, setVersions]             = useState<{id:string;version_number:number;title:string;content:string|null;editor_name:string;created_at:string}[]>([]);
@@ -682,6 +686,16 @@ function GroupNotesTab({ groupId, currentUserId, isOwner }: {
   async function handleDelete(noteId: string) {
     const res = await fetch(`/api/groups/${groupId}/group-notes/${noteId}`, { method: "DELETE" });
     if (res.ok) setNotes((prev) => prev.filter((n) => n.id !== noteId));
+  }
+
+  async function handleViewFlashcards(noteId: string, noteTitle: string) {
+    setViewingCards({ noteId, noteTitle });
+    setFlippedCard(null);
+    setViewCardsLoading(true);
+    const res = await fetch(`/api/groups/${groupId}/group-notes/${noteId}/flashcards`);
+    const j = await res.json();
+    setViewCards(j.data?.flashcards ?? []);
+    setViewCardsLoading(false);
   }
 
   async function handleGenerateFlashcards(noteId: string) {
@@ -851,6 +865,51 @@ function GroupNotesTab({ groupId, currentUserId, isOwner }: {
         </div>
       )}
 
+      {/* Flashcard viewer slide-over */}
+      {viewingCards && (
+        <div className="fixed inset-0 z-50 flex">
+          <div className="flex-1 bg-black/50" onClick={() => { setViewingCards(null); setViewCards([]); }} />
+          <div className="flex h-full w-full max-w-lg flex-col border-l border-border bg-card">
+            <div className="shrink-0 flex items-center justify-between border-b border-border px-6 py-4">
+              <div>
+                <h2 className="font-semibold">Flashcards</h2>
+                <p className="mt-0.5 truncate text-xs text-muted-foreground">{viewingCards.noteTitle}</p>
+              </div>
+              <button onClick={() => { setViewingCards(null); setViewCards([]); }} className="text-muted-foreground hover:text-foreground">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {viewCardsLoading ? (
+                <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+              ) : viewCards.length === 0 ? (
+                <p className="text-center text-sm text-muted-foreground py-12">No flashcards yet.</p>
+              ) : viewCards.map((card, i) => (
+                <div key={card.id}
+                  className="cursor-pointer rounded-xl border border-border bg-card p-4 transition-colors hover:border-accent/40"
+                  onClick={() => setFlippedCard(flippedCard === card.id ? null : card.id)}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="text-xs font-medium text-accent">Q{i + 1}</span>
+                    <span className="text-xs text-muted-foreground">{flippedCard === card.id ? "tap to hide" : "tap for answer"}</span>
+                  </div>
+                  <p className="mt-1.5 text-sm font-medium text-foreground">{card.question}</p>
+                  {flippedCard === card.id && (
+                    <div className="mt-3 rounded-lg border border-accent/20 bg-accent/5 px-3 py-2">
+                      <p className="text-xs font-medium text-accent mb-1">Answer</p>
+                      <p className="text-sm text-foreground">{card.answer}</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="shrink-0 border-t border-border px-4 py-3 text-center">
+              <p className="text-xs text-muted-foreground">{viewCards.length} card{viewCards.length === 1 ? "" : "s"} · Tap any card to reveal the answer</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {notes.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-12 text-center">
           <BookOpen className="mb-3 h-8 w-8 text-muted-foreground" />
@@ -862,6 +921,11 @@ function GroupNotesTab({ groupId, currentUserId, isOwner }: {
         </div>
       ) : (
         <div className="space-y-3">
+          <div className="flex justify-end">
+            <Button size="sm" variant="outline" onClick={() => setCreateOpen(true)} className="gap-1.5 h-7 text-xs">
+              <PlusCircle className="h-3.5 w-3.5" />New note
+            </Button>
+          </div>
           {notes.map((n) => (
             <div key={n.id} className="rounded-xl border border-border/60 bg-card p-4 w-full min-w-0 overflow-hidden [border-left:4px_solid_hsl(var(--accent))]">
               <div className="flex items-start justify-between gap-2 min-w-0">
@@ -907,7 +971,7 @@ function GroupNotesTab({ groupId, currentUserId, isOwner }: {
                 </p>
               )}
 
-              {/* Flashcard button */}
+              {/* Flashcard buttons */}
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <button
                   onClick={() => void handleGenerateFlashcards(n.id)}
@@ -915,11 +979,17 @@ function GroupNotesTab({ groupId, currentUserId, isOwner }: {
                   className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50"
                 >
                   {generatingCards === n.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Layers className="h-3 w-3" />}
-                  {generatingCards === n.id ? "Generating…" : "Flashcards"}
-                  {(flashcardCounts[n.id] ?? 0) > 0 && (
-                    <span className="rounded-full bg-accent/20 px-1.5 py-0.5 text-[10px] text-accent">{flashcardCounts[n.id]}</span>
-                  )}
+                  {generatingCards === n.id ? "Generating…" : "Generate cards"}
                 </button>
+                {(flashcardCounts[n.id] ?? 0) > 0 && (
+                  <button
+                    onClick={() => void handleViewFlashcards(n.id, n.title)}
+                    className="flex items-center gap-1.5 rounded-lg border border-accent/40 bg-accent/10 px-3 py-1.5 text-xs text-accent hover:bg-accent/20 transition-colors"
+                  >
+                    <Layers className="h-3 w-3" />
+                    View {flashcardCounts[n.id]} card{flashcardCounts[n.id] === 1 ? "" : "s"}
+                  </button>
+                )}
               </div>
 
               {/* Expanded content */}
