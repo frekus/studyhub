@@ -1012,17 +1012,17 @@ function GroupNotesTab({ groupId, currentUserId, isOwner }: {
 // LiveSessionTab
 // ---------------------------------------------------------------------------
 
-function LiveSessionTab({ groupId, currentUserId, myNotes, groupNotes }: {
+function LiveSessionTab({ groupId, currentUserId, myNotes }: {
   groupId: string;
   currentUserId: string | null;
   myNotes: MyNote[];
-  groupNotes: GroupNote[];
 }) {
   const [session, setSession] = useState<LiveSession | null>(null);
   const [loading, setLoading] = useState(true);
   const [startOpen, setStartOpen] = useState(false);
   const [selectedNoteId, setSelectedNoteId] = useState("");
   const [selectedNoteIsGroup, setSelectedNoteIsGroup] = useState(false);
+  const [groupNotes, setGroupNotes] = useState<GroupNote[]>([]);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState("");
   const [joining, setJoining] = useState(false);
@@ -1042,7 +1042,12 @@ function LiveSessionTab({ groupId, currentUserId, myNotes, groupNotes }: {
 
   useEffect(() => {
     fetchSession().finally(() => setLoading(false));
-  }, [fetchSession]);
+    // Also load group notes for the session selector
+    fetch(`/api/groups/${groupId}/group-notes`)
+      .then(r => r.json())
+      .then(j => setGroupNotes(j.data?.notes ?? []))
+      .catch(() => {});
+  }, [fetchSession, groupId]);
 
   // Load flashcards when session has a note — with Realtime + polling fallback
   useEffect(() => {
@@ -2423,7 +2428,7 @@ export default function GroupDetailPage() {
 
             {activeTab === "live" && (
               <div className="w-full min-w-0 overflow-hidden">
-                <LiveSessionTab groupId={id} currentUserId={currentUserId} myNotes={myNotes} groupNotes={notes} />
+                <LiveSessionTab groupId={id} currentUserId={currentUserId} myNotes={myNotes} />
               </div>
             )}
 
