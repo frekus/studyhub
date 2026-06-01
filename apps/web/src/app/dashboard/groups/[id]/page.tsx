@@ -1012,15 +1012,17 @@ function GroupNotesTab({ groupId, currentUserId, isOwner }: {
 // LiveSessionTab
 // ---------------------------------------------------------------------------
 
-function LiveSessionTab({ groupId, currentUserId, myNotes }: {
+function LiveSessionTab({ groupId, currentUserId, myNotes, groupNotes }: {
   groupId: string;
   currentUserId: string | null;
   myNotes: MyNote[];
+  groupNotes: GroupNote[];
 }) {
   const [session, setSession] = useState<LiveSession | null>(null);
   const [loading, setLoading] = useState(true);
   const [startOpen, setStartOpen] = useState(false);
   const [selectedNoteId, setSelectedNoteId] = useState("");
+  const [selectedNoteIsGroup, setSelectedNoteIsGroup] = useState(false);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState("");
   const [joining, setJoining] = useState(false);
@@ -1128,7 +1130,10 @@ function LiveSessionTab({ groupId, currentUserId, myNotes }: {
 
     // Pre-check: note must already have flashcards
     try {
-      const fcRes = await fetch(`/api/notes/${selectedNoteId}/flashcards`);
+      const fcUrl = selectedNoteIsGroup
+        ? `/api/groups/${groupId}/group-notes/${selectedNoteId}/flashcards`
+        : `/api/notes/${selectedNoteId}/flashcards`;
+      const fcRes = await fetch(fcUrl);
       const fcJson = await fcRes.json();
       const cards: Flashcard[] = fcJson.data?.flashcards ?? [];
       if (cards.length === 0) {
@@ -1140,7 +1145,7 @@ function LiveSessionTab({ groupId, currentUserId, myNotes }: {
       return;
     }
 
-    const note = myNotes.find((n) => n.id === selectedNoteId);
+    const note = myNotes.find((n) => n.id === selectedNoteId) ?? groupNotes.find((n) => n.id === selectedNoteId);
     setStarting(true);
 
     const controller = new AbortController();
@@ -1235,11 +1240,20 @@ function LiveSessionTab({ groupId, currentUserId, myNotes }: {
                   <label className="text-sm font-medium">Select a note with flashcards</label>
                   <select
                     value={selectedNoteId}
-                    onChange={(e) => { setSelectedNoteId(e.target.value); setStartError(""); }}
+                    onChange={(e) => { setSelectedNoteId(e.target.value); setSelectedNoteIsGroup(groupNotes.some(n => n.id === e.target.value)); setStartError(""); }}
                     className="flex h-10 w-full rounded-md border border-border bg-input px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <option value="">— choose a note —</option>
-                    {myNotes.map((n) => <option key={n.id} value={n.id}>{n.title}</option>)}
+                    {myNotes.length > 0 && (
+                      <optgroup label="My Notes">
+                        {myNotes.map((n) => <option key={n.id} value={n.id}>{n.title}</option>)}
+                      </optgroup>
+                    )}
+                    {groupNotes.length > 0 && (
+                      <optgroup label="Group Notes">
+                        {groupNotes.map((n) => <option key={n.id} value={n.id}>{n.title} (group)</option>)}
+                      </optgroup>
+                    )}
                   </select>
                 </div>
                 {startError && (
@@ -2409,7 +2423,7 @@ export default function GroupDetailPage() {
 
             {activeTab === "live" && (
               <div className="w-full min-w-0 overflow-hidden">
-                <LiveSessionTab groupId={id} currentUserId={currentUserId} myNotes={myNotes} />
+                <LiveSessionTab groupId={id} currentUserId={currentUserId} myNotes={myNotes} groupNotes={notes} />
               </div>
             )}
 
