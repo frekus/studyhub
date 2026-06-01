@@ -2186,7 +2186,6 @@ export default function GroupDetailPage() {
                   </div>
                 )}
               </section>
-            )}
 
             {/* Danger zone */}
             <section className="rounded-xl border border-destructive/30 bg-destructive/5 p-4">
