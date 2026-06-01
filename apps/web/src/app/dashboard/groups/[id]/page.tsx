@@ -1160,7 +1160,7 @@ function LiveSessionTab({ groupId, currentUserId, myNotes }: {
       const res = await fetch(`/api/groups/${groupId}/sessions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ noteId: selectedNoteId, noteTitle: note?.title }),
+        body: JSON.stringify({ noteId: selectedNoteId, noteTitle: note?.title, isGroupNote: selectedNoteIsGroup }),
         signal: controller.signal,
       });
       clearTimeout(timer);
