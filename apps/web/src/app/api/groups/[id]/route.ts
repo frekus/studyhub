@@ -27,7 +27,7 @@ export async function GET(_request: Request, { params }: { params: Params }) {
     admin.from("study_groups").select("*").eq("id", id).single(),
     admin
       .from("study_group_members")
-      .select("id, user_id, role, joined_at, users(id, full_name)")
+      .select("id, user_id, role, joined_at, users(id, full_name, avatar_url)")
       .eq("group_id", id)
       .order("joined_at", { ascending: true }),
   ]);

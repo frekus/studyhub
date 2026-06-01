@@ -1380,6 +1380,9 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
   }, []);
   const [notes, setNotes]         = useState<Note[]>([]);
   const [groups, setGroups]       = useState<Group[]>([]);
+  const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
+  const [bulkMode, setBulkMode]         = useState(false);
+  const [noteSearch, setNoteSearch]     = useState("");
   const [exams, setExams]         = useState<Exam[]>([]);
   const [folders, setFolders]     = useState<Folder[]>([]);
   const [uncategorizedCount, setUncategorizedCount] = useState(0);
@@ -2792,13 +2795,16 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
 
               <div className="min-w-0 flex-1">
                 {(() => {
-                  const filtered = selectedFolderId === null
+                  const baseFiltered = selectedFolderId === null
                     ? notes
                     : selectedFolderId === "uncategorized"
                     ? notes.filter((n) => n.folder_id === null)
                     : notes.filter((n) => n.folder_id === selectedFolderId);
+                  const filtered = noteSearch.trim()
+                    ? baseFiltered.filter((n) => n.title.toLowerCase().includes(noteSearch.toLowerCase()) || (n.content ?? "").toLowerCase().includes(noteSearch.toLowerCase()))
+                    : baseFiltered;
 
-                  if (filtered.length === 0) {
+                  if (baseFiltered.length === 0) {
                     return (
                       <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-16 text-center">
                         <BookOpen className="mb-3 h-10 w-10 text-muted-foreground" />
@@ -2813,21 +2819,111 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
                   }
 
                   return (
-                    <div className="space-y-4">
+                    <div className="space-y-3">
+                      {/* Search + Bulk toolbar */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="relative flex-1 min-w-[160px]">
+                          <input
+                            value={noteSearch}
+                            onChange={(e) => setNoteSearch(e.target.value)}
+                            placeholder="Search notes..."
+                            className="h-8 w-full rounded-lg border border-border bg-input pl-8 pr-3 text-sm focus:outline-none focus:ring-1 focus:ring-accent"
+                          />
+                          <svg className="absolute left-2.5 top-2 h-4 w-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                        </div>
+                        <button
+                          onClick={() => { setBulkMode(v => !v); setBulkSelected(new Set()); }}
+                          className={`h-8 rounded-lg border px-3 text-xs transition-colors ${bulkMode ? "border-accent bg-accent/10 text-accent" : "border-border text-muted-foreground hover:bg-muted"}`}
+                        >
+                          {bulkMode ? "Cancel" : "Select"}
+                        </button>
+                        {bulkMode && bulkSelected.size > 0 && (
+                          <>
+                            <button
+                              onClick={() => setBulkSelected(new Set(filtered.map(n => n.id)))}
+                              className="h-8 rounded-lg border border-border px-3 text-xs text-muted-foreground hover:bg-muted"
+                            >Select all</button>
+                            <button
+                              onClick={async () => {
+                                if (!confirm(`Delete ${bulkSelected.size} note${bulkSelected.size > 1 ? "s" : ""}?`)) return;
+                                for (const nid of bulkSelected) {
+                                  await fetch(`/api/notes/${nid}`, { method: "DELETE" });
+                                  handleNoteDeleted(nid);
+                                }
+                                setBulkSelected(new Set()); setBulkMode(false);
+                              }}
+                              className="h-8 rounded-lg border border-destructive/40 px-3 text-xs text-destructive hover:bg-destructive/10"
+                            >Delete ({bulkSelected.size})</button>
+                            {groups.length > 0 && (
+                              <div className="relative group/share">
+                                <button className="h-8 rounded-lg border border-border px-3 text-xs text-muted-foreground hover:bg-muted">Share with group</button>
+                                <div className="absolute left-0 top-9 z-20 hidden w-48 rounded-lg border border-border bg-card shadow-lg group-hover/share:block">
+                                  {groups.map(g => (
+                                    <button key={g.id}
+                                      onClick={async () => {
+                                        for (const noteId of bulkSelected) {
+                                          await fetch(`/api/groups/${g.id}/notes`, {
+                                            method: "POST", headers: { "Content-Type": "application/json" },
+                                            body: JSON.stringify({ noteId }),
+                                          });
+                                        }
+                                        setBulkSelected(new Set()); setBulkMode(false);
+                                      }}
+                                      className="flex w-full items-center gap-2 px-3 py-2 text-xs hover:bg-muted text-left">{g.name}</button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            <button
+                              onClick={() => {
+                                const sel = filtered.filter(n => bulkSelected.has(n.id));
+                                const text = sel.map(n => `*${n.title}*\n${n.content ?? ""}`).join("\n\n---\n\n");
+                                window.open(`https://wa.me/?text=${encodeURIComponent(text.slice(0, 1000))}`, "_blank");
+                              }}
+                              className="h-8 rounded-lg border border-border px-3 text-xs text-muted-foreground hover:bg-muted"
+                            >WhatsApp</button>
+                            <button
+                              onClick={() => {
+                                const sel = filtered.filter(n => bulkSelected.has(n.id));
+                                const body = sel.map(n => `${n.title}\n\n${n.content ?? ""}`).join("\n\n---\n\n");
+                                const subject = sel.length === 1 ? sel[0].title : `${sel.length} Notes from StudyHub`;
+                                window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body.slice(0, 2000))}`;
+                              }}
+                              className="h-8 rounded-lg border border-border px-3 text-xs text-muted-foreground hover:bg-muted"
+                            >Email</button>
+                          </>
+                        )}
+                      </div>
+
+                      {filtered.length === 0 && noteSearch && (
+                        <p className="py-8 text-center text-sm text-muted-foreground">No notes match &ldquo;{noteSearch}&rdquo;</p>
+                      )}
+
                       {filtered.map((note) => (
-                        <NoteCard
-                          key={note.id}
-                          note={note}
-                          flashcardCount={flashcardsMap[note.id]?.length}
-                          folder={folders.find((f) => f.id === note.folder_id)}
-                          folders={folders}
-                          onDelete={handleNoteDeleted}
-                          onStudy={openStudyMode}
-                          onMove={setMoveNoteTarget}
-                          onHistory={openVersionHistory}
-                          onEdit={openEditNote}
-                          onGenerateMore={handleGenerateMoreForNote}
-                        />
+                        <div key={note.id} className={bulkMode ? "relative pl-8" : ""}>
+                          {bulkMode && (
+                            <input type="checkbox" checked={bulkSelected.has(note.id)}
+                              onChange={() => setBulkSelected(prev => {
+                                const next = new Set(prev);
+                                next.has(note.id) ? next.delete(note.id) : next.add(note.id);
+                                return next;
+                              })}
+                              className="absolute left-0 top-4 h-5 w-5 accent-accent cursor-pointer"
+                            />
+                          )}
+                          <NoteCard
+                            note={note}
+                            flashcardCount={flashcardsMap[note.id]?.length}
+                            folder={folders.find((f) => f.id === note.folder_id)}
+                            folders={folders}
+                            onDelete={handleNoteDeleted}
+                            onStudy={openStudyMode}
+                            onMove={setMoveNoteTarget}
+                            onHistory={openVersionHistory}
+                            onEdit={openEditNote}
+                            onGenerateMore={handleGenerateMoreForNote}
+                          />
+                        </div>
                       ))}
                     </div>
                   );

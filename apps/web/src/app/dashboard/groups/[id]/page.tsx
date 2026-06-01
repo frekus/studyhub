@@ -32,7 +32,7 @@ interface Member {
   user_id: string;
   role: string;
   joined_at: string;
-  users: { id: string; full_name: string | null } | null;
+  users: { id: string; full_name: string | null; avatar_url?: string | null } | null;
 }
 
 interface Group {
@@ -1139,7 +1139,7 @@ function LiveSessionTab({ groupId, currentUserId, myNotes }: {
           <Play className="mb-3 h-8 w-8 text-muted-foreground" />
           <p className="text-sm font-medium">No active session</p>
           <p className="mt-1 text-xs text-muted-foreground">Start a live session to study flashcards together</p>
-          <Button className="mt-4 w-full sm:w-auto" size="sm" onClick={() => setStartOpen(true)}>
+          <Button className="mt-4 gap-2" size="sm" onClick={() => setStartOpen(true)}>
             <Play className="h-4 w-4" />Start session
           </Button>
         </div>
@@ -1793,6 +1793,9 @@ export default function GroupDetailPage() {
   const [membersExpanded, setMembersExpanded] = useState(false);
   const [highlightedNoteId, setHighlightedNoteId] = useState<string | null>(null);
   const [showGroupSettings, setShowGroupSettings] = useState(false);
+  const [blockedMembers, setBlockedMembers] = useState<{id:string;user_id:string;full_name:string;avatar_url:string|null;blocked_at:string}[]>([]);
+  const [loadingBlocked, setLoadingBlocked] = useState(false);
+  const [unblocking, setUnblocking] = useState<string|null>(null);
   const [newGroupName, setNewGroupName] = useState("");
   const [renamingGroup, setRenamingGroup] = useState(false);
   const [deleteGroupConfirm, setDeleteGroupConfirm] = useState(false);
@@ -1900,6 +1903,25 @@ export default function GroupDetailPage() {
     } finally {
       setDeletingGroup(false);
     }
+  }
+
+  async function loadBlockedMembers() {
+    setLoadingBlocked(true);
+    const res = await fetch(`/api/groups/${id}/blocked-members`);
+    const j = await res.json();
+    setBlockedMembers(j.data?.blocked ?? []);
+    setLoadingBlocked(false);
+  }
+
+  async function handleUnblock(userId: string) {
+    setUnblocking(userId);
+    const res = await fetch(`/api/groups/${id}/blocked-members`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId }),
+    });
+    if (res.ok) setBlockedMembers(prev => prev.filter(b => b.user_id !== userId));
+    setUnblocking(null);
   }
 
   async function handleRenameGroup() {
@@ -2068,7 +2090,7 @@ export default function GroupDetailPage() {
       />
 
       {/* Group Settings modal */}
-      <Dialog open={showGroupSettings} onOpenChange={setShowGroupSettings}>
+      <Dialog open={showGroupSettings} onOpenChange={(v) => { setShowGroupSettings(v); if (v) void loadBlockedMembers(); }}>
         <DialogContent className="flex max-h-[90vh] flex-col p-0">
           <div className="shrink-0 border-b border-border px-6 pb-3 pt-6">
             <DialogHeader><DialogTitle>Group Settings</DialogTitle></DialogHeader>
@@ -2097,8 +2119,10 @@ export default function GroupDetailPage() {
                 {members.map((m) => (
                   <div key={m.id} className="flex items-center justify-between rounded-lg border border-border/60 bg-card px-3 py-2.5">
                     <div className="flex items-center gap-2">
-                      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-accent/20 text-xs font-medium text-accent">
-                        {(m.users?.full_name ?? "U")[0].toUpperCase()}
+                      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-accent/20 text-xs font-medium text-accent overflow-hidden">
+                        {m.users?.avatar_url
+                          ? <img src={m.users.avatar_url} alt={m.users?.full_name ?? "U"} className="h-7 w-7 object-cover" />
+                          : (m.users?.full_name ?? "U")[0].toUpperCase()}
                       </div>
                       <div>
                         <p className="text-sm font-medium">{m.users?.full_name ?? "Unknown"}</p>
@@ -2127,6 +2151,43 @@ export default function GroupDetailPage() {
                 ))}
               </div>
             </section>
+
+            {/* Blocked Members */}
+            {isOwner && (
+              <section>
+                <h3 className="mb-3 text-sm font-semibold">Blocked Members ({blockedMembers.length})</h3>
+                {loadingBlocked ? (
+                  <div className="flex justify-center py-4"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>
+                ) : blockedMembers.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No blocked members.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {blockedMembers.map((b) => (
+                      <div key={b.id} className="flex items-center justify-between rounded-lg border border-border/60 bg-card px-3 py-2.5">
+                        <div className="flex items-center gap-2">
+                          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-xs font-medium overflow-hidden">
+                            {b.avatar_url
+                              ? <img src={b.avatar_url} alt={b.full_name} className="h-7 w-7 object-cover" />
+                              : b.full_name[0].toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium">{b.full_name}</p>
+                            <p className="text-xs text-muted-foreground">Blocked {new Date(b.blocked_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => void handleUnblock(b.user_id)}
+                          disabled={unblocking === b.user_id}
+                          className="rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+                        >
+                          {unblocking === b.user_id ? "Unblocking…" : "Unblock"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
 
             {/* Danger zone */}
             <section className="rounded-xl border border-destructive/30 bg-destructive/5 p-4">
