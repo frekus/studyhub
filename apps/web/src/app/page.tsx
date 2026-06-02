@@ -288,7 +288,7 @@ export default function LandingPage() {
       </nav>
 
       {/* ── HERO ── */}
-      <section className="relative overflow-hidden px-6 py-20 lg:py-28">
+      <section className="relative overflow-hidden px-6 py-10 lg:py-14">
         <div className="hero-glow pointer-events-none absolute inset-0" />
         <div className="bg-grid pointer-events-none absolute inset-0 opacity-40" />
         <div className="relative mx-auto grid max-w-7xl items-center gap-12 lg:grid-cols-2">
@@ -385,7 +385,7 @@ export default function LandingPage() {
 
 
       {/* ── CHALLENGES ── */}
-      <section className="px-6 py-20">
+      <section className="px-6 py-10">
         <div className="mx-auto max-w-7xl">
           <p className="mb-3 text-xs font-semibold uppercase tracking-[0.15em] text-orange-400">The Challenges</p>
           <h2 className="max-w-xl text-3xl font-bold tracking-tight sm:text-4xl">
@@ -411,7 +411,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── HOW IT WORKS ── */}
-      <section id="how-it-works" className="bg-muted/20 px-6 py-20">
+      <section id="how-it-works" className="bg-muted/20 px-6 py-10">
         <div className="mx-auto max-w-7xl">
           <p className="mb-3 text-xs font-semibold uppercase tracking-[0.15em] text-orange-400">How It Works</p>
           <h2 className="max-w-xl text-3xl font-bold tracking-tight sm:text-4xl">
@@ -440,7 +440,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── FEATURES ── */}
-      <section id="features" className="px-6 py-20">
+      <section id="features" className="px-6 py-10">
         <div className="mx-auto max-w-7xl">
           <p className="mb-3 text-xs font-semibold uppercase tracking-[0.15em] text-orange-400">Powerful Tools</p>
           <h2 className="max-w-xl text-3xl font-bold tracking-tight sm:text-4xl">
@@ -551,7 +551,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── PRICING ── */}
-      <section id="pricing" className="bg-muted/20 px-6 py-20">
+      <section id="pricing" className="bg-muted/20 px-6 py-10">
         <div className="mx-auto max-w-5xl">
           <p className="mb-3 text-xs font-semibold uppercase tracking-[0.15em] text-orange-400">Pricing</p>
           <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">Simple pricing. Unbeatable value.</h2>
@@ -646,7 +646,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── TESTIMONIALS ── */}
-      <section className="px-6 py-20">
+      <section className="px-6 py-10">
         <div className="mx-auto max-w-7xl">
           <p className="mb-10 text-xs font-semibold uppercase tracking-[0.15em] text-orange-400">Loved by Students</p>
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -673,7 +673,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── FAQ ── */}
-      <section id="faq" className="bg-muted/20 px-6 py-20">
+      <section id="faq" className="bg-muted/20 px-6 py-10">
         <div className="mx-auto max-w-3xl">
           <p className="mb-4 text-xs font-semibold uppercase tracking-[0.15em] text-orange-400">Frequently Asked Questions</p>
           <h2 className="mb-10 text-3xl font-bold tracking-tight sm:text-4xl">Got questions? We have answers.</h2>
@@ -704,7 +704,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── CTA ── */}
-      <section className="relative overflow-hidden px-6 py-24 text-center" id="about">
+      <section className="relative overflow-hidden px-6 py-12 text-center" id="about">
         <div className="hero-glow pointer-events-none absolute inset-0" />
         {/* Sparkle decorations */}
         <Sparkles className="absolute left-1/4 top-8 h-5 w-5 text-orange-400/30" />

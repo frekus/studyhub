@@ -24,6 +24,7 @@ export async function GET(_request: Request, { params }: { params: Params }) {
     .eq("id", sessionId)
     .single();
   if (!session) return err("Session not found", 404);
+  console.log("[session-flashcards] session:", JSON.stringify(session));
 
   let flashcards;
   if (session.group_note_id) {
