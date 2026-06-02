@@ -1155,38 +1155,35 @@ function LiveSessionTab({ groupId, currentUserId, myNotes }: {
       .on("postgres_changes", {
         event: "INSERT", schema: "public", table: "session_comments",
         filter: `session_id=eq.${session.id}`,
-      }, (payload: { new: Record<string, unknown> }) => {
-        const row = payload.new as { id: string; content: string; user_id: string; created_at: string };
-        // Fetch the sender's profile then add to comments
-        getSupabase()
-          .from("users")
-          .select("full_name, avatar_url")
-          .eq("id", row.user_id)
-          .single()
-          .then(({ data }) => {
-            setComments(prev => {
-              // Avoid duplicates (own messages already added optimistically)
-              if (prev.some(c => c.id === row.id)) return prev;
-              const newComment = {
-                id: row.id,
-                content: row.content,
-                user_id: row.user_id,
-                full_name: (data as { full_name: string | null; avatar_url: string | null } | null)?.full_name ?? "Member",
-                avatar_url: (data as { full_name: string | null; avatar_url: string | null } | null)?.avatar_url ?? null,
-                is_mine: false,
-                created_at: row.created_at,
-              };
-              const updated = [...prev, newComment];
-              setTimeout(() => commentsEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
-              return updated;
-            });
-          });
+      }, (_payload: { new: Record<string, unknown> }) => {
+        // Reload all comments from API to get enriched data (names, avatars)
+        // This avoids nested Supabase calls inside Realtime callbacks
+        fetch(`/api/groups/${groupId}/sessions/${session.id}/comments`)
+          .then(r => r.json())
+          .then(j => {
+            setComments(j.data?.comments ?? []);
+            setTimeout(() => commentsEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+          })
+          .catch(() => {});
       })
       .subscribe((status: string) => setConnected(status === "SUBSCRIBED"));
 
     channelRef.current = ch as unknown as typeof channelRef.current;
-    return () => { void supabase.removeChannel(ch); setConnected(false); };
-  }, [session?.id]);
+    // Polling fallback — refresh comments every 5s in case Realtime misses events
+    const commentPoll = setInterval(() => {
+      if (!session?.id) return;
+      fetch(`/api/groups/${groupId}/sessions/${session.id}/comments`)
+        .then(r => r.json())
+        .then(j => { if (j.data?.comments) setComments(j.data.comments); })
+        .catch(() => {});
+    }, 5000);
+
+    return () => {
+      void supabase.removeChannel(ch);
+      setConnected(false);
+      clearInterval(commentPoll);
+    };
+  }, [session?.id, groupId]);
 
   async function handleStart(e: React.FormEvent) {
     e.preventDefault();
