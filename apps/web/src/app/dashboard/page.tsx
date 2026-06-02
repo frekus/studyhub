@@ -1585,7 +1585,8 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
   useEffect(() => {
     async function init() {
       try {
-        const [meRes, notesRes, groupsRes, examsRes, subRes, foldersRes, streaksRes, notifsRes, adminRes, plansRes, weakRes, dueRes, aiConvsRes, profileRes] = await Promise.all([
+        // Tier 1 — critical: auth + main content (loads immediately)
+        const [meRes, notesRes, groupsRes, examsRes, subRes, foldersRes, streaksRes, notifsRes] = await Promise.all([
           fetch("/api/auth/me"),
           fetch("/api/notes"),
           fetch("/api/groups"),
@@ -1594,13 +1595,48 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
           fetch("/api/folders"),
           fetch("/api/streaks"),
           fetch("/api/notifications"),
+        ]);
+
+        // Tier 2 — deferred: non-critical data loaded after page renders
+        const [adminRes, plansRes, weakRes, dueRes, aiConvsRes, profileRes] = [
+          null, null, null, null, null, null
+        ] as [Response | null, Response | null, Response | null, Response | null, Response | null, Response | null];
+
+        // Fire deferred calls in background (don't await)
+        Promise.all([
           fetch("/api/admin/check", { credentials: "include" }),
           fetch("/api/plans"),
           fetch("/api/flashcards/weak-areas"),
           fetch("/api/flashcards/due"),
           fetch("/api/ai/conversations"),
           fetch("/api/profile"),
-        ]);
+        ]).then(async ([_adminRes, _plansRes, _weakRes, _dueRes, _aiConvsRes, _profileRes]) => {
+          // Process deferred responses
+          try {
+            const adminJson = await _adminRes.json() as { data?: { isAdmin?: boolean } };
+            if (adminJson?.data?.isAdmin) setIsAdmin(true);
+          } catch { /* ignore */ }
+          try {
+            const plansJson = await _plansRes.json() as { data?: { plans?: StudyPlan[] } };
+            setPlans(plansJson.data?.plans ?? []);
+          } catch { /* ignore */ }
+          try {
+            const weakJson = await _weakRes.json() as { data?: { weak_areas?: WeakArea[] } };
+            setWeakAreas(weakJson.data?.weak_areas ?? []);
+          } catch { /* ignore */ }
+          try {
+            const dueJson = await _dueRes.json() as { data?: { flashcards?: Flashcard[] } };
+            setDueFlashcards(dueJson.data?.flashcards ?? []);
+          } catch { /* ignore */ }
+          try {
+            const aiConvsJson = await _aiConvsRes.json() as { data?: { conversations?: AIConversation[] } };
+            setAiConversations(aiConvsJson.data?.conversations ?? []);
+          } catch { /* ignore */ }
+          try {
+            const profileJson = await _profileRes.json() as { data?: { profile?: StudentProfile } };
+            if (profileJson.data?.profile) setStudentProfile(profileJson.data.profile);
+          } catch { /* ignore */ }
+        }).catch(() => {});
 
         if (!meRes.ok) { router.replace("/login"); return; }
 
@@ -1650,38 +1686,6 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
           const j = await notifsRes.json() as { data?: { notifications: Notification[]; unread_count: number } };
           if (j.data) { setNotifications(j.data.notifications ?? []); setUnreadCount(j.data.unread_count ?? 0); }
         }
-
-        if (adminRes.ok) {
-          const j = await adminRes.json() as { data?: { isAdmin?: boolean } };
-          if (j.data?.isAdmin) setIsAdmin(true);
-        }
-
-        if (plansRes.ok) {
-          const j = await plansRes.json() as { data?: { plans: StudyPlan[] } };
-          if (Array.isArray(j.data?.plans)) setPlans(j.data.plans);
-        }
-
-        if (weakRes.ok) {
-          const j = await weakRes.json() as { data?: { weakAreas: WeakArea[] } };
-          if (Array.isArray(j.data?.weakAreas)) setWeakAreas(j.data.weakAreas);
-        }
-
-        if (dueRes.ok) {
-          const j = await dueRes.json() as { data?: { dueCards: DueCard[] } };
-          if (Array.isArray(j.data?.dueCards)) setDueCards(j.data.dueCards);
-        }
-
-        if (aiConvsRes.ok) {
-          const j = await aiConvsRes.json() as { data?: { conversations: AiConversation[] } };
-          if (Array.isArray(j.data?.conversations)) setAiConversations(j.data.conversations);
-        }
-
-        if (profileRes.ok) {
-          const j = await profileRes.json() as { data?: { profile: StudentProfile } };
-          if (j.data?.profile) setStudentProfile(j.data.profile);
-        }
-
-        if (!localStorage.getItem("studyhub_onboarding_complete")) {
           setOnboardingOpen(true);
         }
       } catch {
