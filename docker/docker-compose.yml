@@ -38,8 +38,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    command: redis-server --requirepass studyhub --bind 0.0.0.0 --protected-mode no
     volumes:
       - redis_data:/data
     networks:
@@ -70,7 +69,7 @@ services:
       # These override/supplement env_file values.
       # Service-name hostnames are resolved by Docker's internal DNS.
       - RABBITMQ_URL=amqp://studyhub:studyhub@rabbitmq:5672
-      - REDIS_URL=redis://redis:6379
+      - REDIS_URL=redis://:studyhub@redis:6379
       # Pass-through: values come from env_file (no = means "inherit from env_file")
       - NEXT_PUBLIC_SUPABASE_URL
       - NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -94,7 +93,7 @@ services:
       - ../.env.local
     environment:
       - RABBITMQ_URL=amqp://studyhub:studyhub@rabbitmq:5672
-      - REDIS_URL=redis://redis:6379
+      - REDIS_URL=redis://:studyhub@redis:6379
       - SUPABASE_URL
       - SUPABASE_SERVICE_ROLE_KEY
       - ANTHROPIC_API_KEY
