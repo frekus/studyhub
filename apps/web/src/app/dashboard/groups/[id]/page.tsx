@@ -1029,6 +1029,10 @@ function LiveSessionTab({ groupId, currentUserId, myNotes }: {
   const [joining, setJoining] = useState(false);
   const [flashcards, setFlashcards] = useState<Flashcard[]>([]);
   const [flashcardsWaiting, setFlashcardsWaiting] = useState(false);
+  const [comments, setComments] = useState<{id:string;content:string;full_name:string;avatar_url:string|null;is_mine:boolean;created_at:string}[]>([]);
+  const [commentText, setCommentText] = useState("");
+  const [sendingComment, setSendingComment] = useState(false);
+  const commentsEndRef = useRef<HTMLDivElement | null>(null);
   const [connected, setConnected] = useState(false);
   const channelRef = useRef<ReturnType<typeof getSupabase>["channel"] extends (name: string) => infer R ? R : never | null>(null);
   const fcPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -1038,7 +1042,9 @@ function LiveSessionTab({ groupId, currentUserId, myNotes }: {
   const fetchSession = useCallback(async () => {
     const res = await fetch(`/api/groups/${groupId}/sessions/active`);
     const j = await res.json();
-    setSession(j.data?.session ?? null);
+    const s = j.data?.session ?? null;
+    setSession(s);
+    if (s?.id) void loadComments(s.id);
   }, [groupId]);
 
   useEffect(() => {
@@ -1175,6 +1181,7 @@ function LiveSessionTab({ groupId, currentUserId, myNotes }: {
       // useEffect fires on the next render before any further API calls
       setSession(j.data.session);
       setStartOpen(false);
+      void loadComments(j.data.session.id);
     } catch (error) {
       clearTimeout(timer);
       console.error("Session start error:", error);
@@ -1186,6 +1193,30 @@ function LiveSessionTab({ groupId, currentUserId, myNotes }: {
     } finally {
       setStarting(false);
     }
+  }
+
+  async function loadComments(sessionId: string) {
+    const res = await fetch(`/api/groups/${groupId}/sessions/${sessionId}/comments`);
+    const j = await res.json();
+    setComments(j.data?.comments ?? []);
+    setTimeout(() => commentsEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+  }
+
+  async function sendComment(e: React.FormEvent) {
+    e.preventDefault();
+    if (!commentText.trim() || !session) return;
+    setSendingComment(true);
+    const res = await fetch(`/api/groups/${groupId}/sessions/${session.id}/comments`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: commentText.trim() }),
+    });
+    const j = await res.json();
+    if (res.ok && j.data?.comment) {
+      setComments(prev => [...prev, j.data.comment]);
+      setCommentText("");
+      setTimeout(() => commentsEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+    }
+    setSendingComment(false);
   }
 
   async function handleJoin() {
@@ -1344,6 +1375,51 @@ function LiveSessionTab({ groupId, currentUserId, myNotes }: {
           )}
         </div>
       )}
+
+      {/* Live Comments */}
+      <div className="rounded-xl border border-border bg-card">
+        <div className="flex items-center gap-2 border-b border-border px-4 py-2.5">
+          <Send className="h-3.5 w-3.5 text-muted-foreground" />
+          <span className="text-sm font-medium">Session Chat</span>
+          <span className="ml-auto text-xs text-muted-foreground">{comments.length} message{comments.length !== 1 ? "s" : ""}</span>
+        </div>
+        <div className="h-48 overflow-y-auto p-3 space-y-2">
+          {comments.length === 0 ? (
+            <p className="text-center text-xs text-muted-foreground py-6">No messages yet. Start the conversation!</p>
+          ) : comments.map((c) => (
+            <div key={c.id} className={`flex gap-2 ${c.is_mine ? "flex-row-reverse" : ""}`}>
+              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent/20 text-xs font-medium overflow-hidden">
+                {c.avatar_url
+                  ? <img src={c.avatar_url} alt={c.full_name} className="h-6 w-6 object-cover" />
+                  : c.full_name[0]?.toUpperCase()}
+              </div>
+              <div className={`max-w-[75%] ${c.is_mine ? "items-end" : "items-start"} flex flex-col`}>
+                {!c.is_mine && <span className="text-[10px] text-muted-foreground mb-0.5">{c.full_name}</span>}
+                <div className={`rounded-2xl px-3 py-1.5 text-sm ${c.is_mine ? "bg-accent text-accent-foreground rounded-tr-sm" : "bg-muted text-foreground rounded-tl-sm"}`}>
+                  {c.content}
+                </div>
+              </div>
+            </div>
+          ))}
+          <div ref={commentsEndRef} />
+        </div>
+        <form onSubmit={sendComment} className="flex gap-2 border-t border-border px-3 py-2">
+          <input
+            value={commentText}
+            onChange={(e) => setCommentText(e.target.value)}
+            placeholder="Type a message…"
+            maxLength={500}
+            className="flex-1 rounded-lg border border-border bg-input px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-accent"
+          />
+          <button
+            type="submit"
+            disabled={sendingComment || !commentText.trim()}
+            className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground hover:opacity-90 disabled:opacity-50"
+          >
+            {sendingComment ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
