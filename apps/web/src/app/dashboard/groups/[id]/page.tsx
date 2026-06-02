@@ -17,7 +17,7 @@ import {
   ArrowLeft, BookOpen, Users, Copy, Check, Home, LogOut, Share2,
   Loader2, Layers, Download, FileText, Trophy, Play, Square,
   PlusCircle, Send, Trash2, Smile, Upload, ChevronRight, ChevronDown, ChevronUp,
-  FlaskConical, Crown, Wifi, WifiOff, X, Settings, Pencil, History, RotateCcw,
+  FlaskConical, Crown, Wifi, WifiOff, X, Settings, Pencil, History, RotateCcw, Calendar,
 } from "lucide-react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { cn } from "@/lib/utils";
@@ -86,6 +86,17 @@ interface LiveSession {
   host_id: string;
   participant_count: number;
   is_participant: boolean;
+}
+
+interface ScheduledSession {
+  id: string;
+  title: string;
+  scheduled_at: string;
+  status: string;
+  scheduler_name: string;
+  note_title: string | null;
+  scheduled_by: string;
+  votes: { agree: number; disagree: number; my_vote: string | null };
 }
 
 interface LeaderboardEntry {
@@ -1024,6 +1035,13 @@ function LiveSessionTab({ groupId, currentUserId, myNotes }: {
   const [selectedNoteId, setSelectedNoteId] = useState("");
   const [selectedNoteIsGroup, setSelectedNoteIsGroup] = useState(false);
   const [groupNotes, setGroupNotes] = useState<GroupNote[]>([]);
+  const [scheduledSessions, setScheduledSessions] = useState<ScheduledSession[]>([]);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [schedTitle, setSchedTitle] = useState("");
+  const [schedDate, setSchedDate] = useState("");
+  const [schedTime, setSchedTime] = useState("");
+  const [scheduling, setScheduling] = useState(false);
+  const [voting, setVoting] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState("");
   const [joining, setJoining] = useState(false);
@@ -1053,6 +1071,11 @@ function LiveSessionTab({ groupId, currentUserId, myNotes }: {
     fetch(`/api/groups/${groupId}/group-notes`)
       .then(r => r.json())
       .then(j => setGroupNotes(j.data?.notes ?? []))
+      .catch(() => {});
+    // Load scheduled sessions
+    fetch(`/api/groups/${groupId}/scheduled-sessions`)
+      .then(r => r.json())
+      .then(j => setScheduledSessions(j.data?.sessions ?? []))
       .catch(() => {});
   }, [fetchSession, groupId]);
 
@@ -1225,6 +1248,51 @@ function LiveSessionTab({ groupId, currentUserId, myNotes }: {
     }
   }
 
+  async function handleSchedule(e: React.FormEvent) {
+    e.preventDefault();
+    if (!schedTitle.trim() || !schedDate || !schedTime) return;
+    setScheduling(true);
+    const scheduled_at = new Date(`${schedDate}T${schedTime}:00`).toISOString();
+    const res = await fetch(`/api/groups/${groupId}/scheduled-sessions`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: schedTitle.trim(), scheduled_at }),
+    });
+    const j = await res.json();
+    if (res.ok) {
+      const newSess = {
+        ...j.data.session,
+        scheduler_name: "You",
+        votes: { agree: 1, disagree: 0, my_vote: "agree" },
+      };
+      setScheduledSessions(prev => [...prev, newSess]);
+      setSchedTitle(""); setSchedDate(""); setSchedTime(""); setScheduleOpen(false);
+    }
+    setScheduling(false);
+  }
+
+  async function handleVote(sessionId: string, vote: "agree" | "disagree") {
+    setVoting(sessionId);
+    const res = await fetch(`/api/groups/${groupId}/scheduled-sessions/${sessionId}/vote`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ vote }),
+    });
+    const j = await res.json();
+    if (res.ok) {
+      setScheduledSessions(prev => prev.map(s => s.id === sessionId
+        ? { ...s, votes: { agree: j.data.agree, disagree: j.data.disagree, my_vote: vote },
+            status: j.data.agree > (j.data.agree + j.data.disagree) / 2 ? "confirmed" : s.status }
+        : s
+      ));
+    }
+    setVoting(null);
+  }
+
+  async function handleCancelScheduled(sessionId: string) {
+    if (!confirm("Cancel this scheduled session?")) return;
+    const res = await fetch(`/api/groups/${groupId}/scheduled-sessions/${sessionId}`, { method: "DELETE" });
+    if (res.ok) setScheduledSessions(prev => prev.filter(s => s.id !== sessionId));
+  }
+
   async function loadComments(sessionId: string) {
     const res = await fetch(`/api/groups/${groupId}/sessions/${sessionId}/comments`);
     const j = await res.json();
@@ -1277,14 +1345,103 @@ function LiveSessionTab({ groupId, currentUserId, myNotes }: {
   if (!session) {
     return (
       <div className="space-y-4">
+        {/* Scheduled sessions */}
+        {scheduledSessions.length > 0 && scheduledSessions.map(ss => (
+          <div key={ss.id} className={`rounded-xl border p-4 ${ss.status === "confirmed" ? "border-green-500/40 bg-green-500/5" : "border-accent/40 bg-accent/5"}`}>
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-semibold">{ss.title}</span>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${ss.status === "confirmed" ? "bg-green-500/20 text-green-500" : "bg-accent/20 text-accent"}`}>
+                    {ss.status === "confirmed" ? "✅ Confirmed" : "🗳️ Voting"}
+                  </span>
+                </div>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {new Date(ss.scheduled_at).toLocaleString("en-NG", { weekday:"short", month:"short", day:"numeric", hour:"2-digit", minute:"2-digit", timeZone:"Africa/Lagos" })} WAT
+                  {" · "}Proposed by {ss.scheduler_name}
+                </p>
+              </div>
+              {(ss.scheduled_by === currentUserId) && (
+                <button onClick={() => void handleCancelScheduled(ss.id)} className="text-xs text-destructive hover:underline shrink-0">Cancel</button>
+              )}
+            </div>
+            {/* Vote bar */}
+            <div className="mt-3 flex items-center gap-3">
+              <button
+                onClick={() => void handleVote(ss.id, "agree")}
+                disabled={voting === ss.id}
+                className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs transition-colors ${ss.votes.my_vote === "agree" ? "border-green-500 bg-green-500/10 text-green-500" : "border-border text-muted-foreground hover:bg-muted"}`}
+              >
+                👍 Agree ({ss.votes.agree})
+              </button>
+              <button
+                onClick={() => void handleVote(ss.id, "disagree")}
+                disabled={voting === ss.id}
+                className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs transition-colors ${ss.votes.my_vote === "disagree" ? "border-destructive bg-destructive/10 text-destructive" : "border-border text-muted-foreground hover:bg-muted"}`}
+              >
+                👎 Disagree ({ss.votes.disagree})
+              </button>
+              {voting === ss.id && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+            </div>
+          </div>
+        ))}
+
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-12 text-center">
           <Play className="mb-3 h-8 w-8 text-muted-foreground" />
           <p className="text-sm font-medium">No active session</p>
-          <p className="mt-1 text-xs text-muted-foreground">Start a live session to study flashcards together</p>
-          <Button className="mt-4 gap-2" size="sm" onClick={() => setStartOpen(true)}>
-            <Play className="h-4 w-4" />Start session
-          </Button>
+          <p className="mt-1 text-xs text-muted-foreground">Start a live session or schedule one for later</p>
+          <div className="mt-4 flex flex-wrap gap-2 justify-center">
+            <Button className="gap-2" size="sm" onClick={() => setStartOpen(true)}>
+              <Play className="h-4 w-4" />Start now
+            </Button>
+            <Button className="gap-2" size="sm" variant="outline" onClick={() => setScheduleOpen(true)}>
+              <Calendar className="h-4 w-4" />Schedule
+            </Button>
+          </div>
         </div>
+
+        {/* Schedule modal */}
+        {scheduleOpen && (
+          <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm"
+            onClick={(ev) => { if (ev.target === ev.currentTarget) setScheduleOpen(false); }}>
+            <div className="mx-auto my-8 w-full max-w-md rounded-lg border border-border bg-card p-6 shadow-xl">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-lg font-semibold">Schedule a live session</h2>
+                <button onClick={() => setScheduleOpen(false)} className="text-muted-foreground hover:text-foreground">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <form onSubmit={handleSchedule} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">Session title</label>
+                  <input value={schedTitle} onChange={e => setSchedTitle(e.target.value)} required
+                    placeholder="e.g. Week 9 Flashcard Review"
+                    className="flex h-10 w-full rounded-md border border-border bg-input px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium">Date</label>
+                    <input type="date" value={schedDate} onChange={e => setSchedDate(e.target.value)} required
+                      min={new Date().toISOString().split("T")[0]}
+                      className="flex h-10 w-full rounded-md border border-border bg-input px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium">Time (WAT)</label>
+                    <input type="time" value={schedTime} onChange={e => setSchedTime(e.target.value)} required
+                      className="flex h-10 w-full rounded-md border border-border bg-input px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">Group members will be notified and can vote to confirm the time.</p>
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="outline" onClick={() => setScheduleOpen(false)}>Cancel</Button>
+                  <Button type="submit" disabled={scheduling || !schedTitle.trim() || !schedDate || !schedTime}>
+                    {scheduling ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />Scheduling…</> : "Schedule & notify"}
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
         {startOpen && (
           <div
             className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm"

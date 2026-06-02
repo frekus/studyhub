@@ -726,6 +726,81 @@ async function main(): Promise<void> {
     }
   });
 
+  // ---- Session reminder polling (every 60s) ---------------------------------
+  async function checkSessionReminders() {
+    try {
+      const now = new Date();
+      const in30 = new Date(now.getTime() + 31 * 60 * 1000).toISOString();
+      const in1  = new Date(now.getTime() + 2  * 60 * 1000).toISOString();
+      const ago5 = new Date(now.getTime() - 5  * 60 * 1000).toISOString();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: sessions } = await (supabase as any)
+        .from("scheduled_sessions")
+        .select("id, group_id, title, scheduled_at, status, day_notified, min30_notified, started_notified")
+        .in("status", ["confirmed"])
+        .gte("scheduled_at", ago5)
+        .lte("scheduled_at", in30);
+
+      for (const sess of (sessions ?? [])) {
+        const scheduledAt = new Date(sess.scheduled_at);
+        const msUntil = scheduledAt.getTime() - now.getTime();
+
+        // Get group members
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: members } = await (supabase as any)
+          .from("study_group_members").select("user_id").eq("group_id", sess.group_id);
+
+        const makeNotifs = (msg: string, type: string) =>
+          (members ?? []).map((m: { user_id: string }) => ({
+            user_id: m.user_id, from_user_id: m.user_id,
+            group_id: sess.group_id, type,
+            message: msg,
+          }));
+
+        // Day-of notification (within 24h, not yet sent)
+        if (!sess.day_notified && msUntil <= 24 * 60 * 60 * 1000 && msUntil > 31 * 60 * 1000) {
+          const dateStr = scheduledAt.toLocaleString("en-NG", { hour: "2-digit", minute: "2-digit", timeZone: "Africa/Lagos" });
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabase as any).from("group_notifications").insert(
+            makeNotifs(`📅 Reminder: "${sess.title}" live session is today at ${dateStr} WAT!`, "session_reminder_day")
+          );
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabase as any).from("scheduled_sessions").update({ day_notified: true }).eq("id", sess.id);
+          console.log(`[reminders] Day notification sent for session ${sess.id}`);
+        }
+
+        // 30-min notification
+        if (!sess.min30_notified && msUntil <= 31 * 60 * 1000 && msUntil > 0) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabase as any).from("group_notifications").insert(
+            makeNotifs(`⏰ "${sess.title}" live session starts in 30 minutes! Get ready.`, "session_reminder_30min")
+          );
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabase as any).from("scheduled_sessions").update({ min30_notified: true }).eq("id", sess.id);
+          console.log(`[reminders] 30min notification sent for session ${sess.id}`);
+        }
+
+        // Session starting now (within 2 min window)
+        if (!sess.started_notified && msUntil <= 2 * 60 * 1000 && msUntil > -5 * 60 * 1000) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabase as any).from("group_notifications").insert(
+            makeNotifs(`🚀 "${sess.title}" live session is starting NOW! Join the Live tab.`, "session_started")
+          );
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabase as any).from("scheduled_sessions").update({ started_notified: true, status: "started" }).eq("id", sess.id);
+          console.log(`[reminders] Start notification sent for session ${sess.id}`);
+        }
+      }
+    } catch (e) {
+      console.error("[reminders] Error checking session reminders:", e);
+    }
+  }
+
+  // Run immediately then every 60 seconds
+  void checkSessionReminders();
+  const reminderInterval = setInterval(() => void checkSessionReminders(), 60 * 1000);
+
   // ---- Graceful shutdown ---------------------------------------------------
 
   const shutdown = async (signal: string) => {
@@ -737,6 +812,7 @@ async function main(): Promise<void> {
     try { await groupExamChannel.close();      } catch { /* ignore */ }
     try { await studyPlanChannel.close();      } catch { /* ignore */ }
     try { await connection.close();            } catch { /* ignore */ }
+    clearInterval(reminderInterval);
     process.exit(0);
   };
 

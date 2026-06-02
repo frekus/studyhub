@@ -9,6 +9,10 @@ function computeActionUrl(type: string, groupId: string | null, noteId: string |
     case "group_note":
       return `/dashboard/groups/${groupId}?tab=group-notes`;
     case "session_started":
+    case "session_scheduled":
+    case "session_confirmed":
+    case "session_reminder_day":
+    case "session_reminder_30min":
       return `/dashboard/groups/${groupId}?tab=live`;
     default:
       return `/dashboard/groups/${groupId}`;
