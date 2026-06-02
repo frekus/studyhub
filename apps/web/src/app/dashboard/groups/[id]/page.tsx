@@ -1129,6 +1129,36 @@ function LiveSessionTab({ groupId, currentUserId, myNotes }: {
         if (!row.is_active) { setSession(null); return; }
         setSession((prev) => prev ? { ...prev, current_card_index: row.current_card_index } : prev);
       })
+      .on("postgres_changes", {
+        event: "INSERT", schema: "public", table: "session_comments",
+        filter: `session_id=eq.${session.id}`,
+      }, (payload: { new: Record<string, unknown> }) => {
+        const row = payload.new as { id: string; content: string; user_id: string; created_at: string };
+        // Fetch the sender's profile then add to comments
+        getSupabase()
+          .from("users")
+          .select("full_name, avatar_url")
+          .eq("id", row.user_id)
+          .single()
+          .then(({ data }) => {
+            setComments(prev => {
+              // Avoid duplicates (own messages already added optimistically)
+              if (prev.some(c => c.id === row.id)) return prev;
+              const newComment = {
+                id: row.id,
+                content: row.content,
+                user_id: row.user_id,
+                full_name: (data as { full_name: string | null; avatar_url: string | null } | null)?.full_name ?? "Member",
+                avatar_url: (data as { full_name: string | null; avatar_url: string | null } | null)?.avatar_url ?? null,
+                is_mine: false,
+                created_at: row.created_at,
+              };
+              const updated = [...prev, newComment];
+              setTimeout(() => commentsEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+              return updated;
+            });
+          });
+      })
       .subscribe((status: string) => setConnected(status === "SUBSCRIBED"));
 
     channelRef.current = ch as unknown as typeof channelRef.current;
