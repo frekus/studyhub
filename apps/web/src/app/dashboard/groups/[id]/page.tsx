@@ -1142,7 +1142,7 @@ function LiveSessionTab({ groupId, currentUserId, myNotes }: {
       const fcJson = await fcRes.json();
       const cards: Flashcard[] = fcJson.data?.flashcards ?? [];
       if (cards.length === 0) {
-        setStartError("This note has no flashcards yet. Generate flashcards first before starting a session.");
+        setStartError("This note has no flashcards yet. Generate flashcards first from the Group Notes tab.");
         return;
       }
     } catch {
