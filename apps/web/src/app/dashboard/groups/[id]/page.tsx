@@ -79,6 +79,7 @@ interface GroupNote {
 interface LiveSession {
   id: string;
   note_id: string | null;
+  group_note_id: string | null;
   note_title: string | null;
   current_card_index: number;
   is_active: boolean;
@@ -1051,7 +1052,7 @@ function LiveSessionTab({ groupId, currentUserId, myNotes }: {
 
   // Load flashcards when session has a note — with Realtime + polling fallback
   useEffect(() => {
-    const noteId = session?.note_id;
+    const noteId = session?.note_id ?? session?.group_note_id;
     const sessionId = session?.id;
     if (!noteId || !sessionId) { setFlashcards([]); setFlashcardsWaiting(false); return; }
 
