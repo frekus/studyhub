@@ -72,18 +72,17 @@ export async function GET() {
 
   if (groupsErr) return err(groupsErr.message, 500);
 
-  // Member counts per group — single query instead of N
-  const { data: allMembers, error: membersErr } = await admin
-    .from("study_group_members")
-    .select("group_id")
-    .in("group_id", groupIds);
-
-  if (membersErr) return err(membersErr.message, 500);
-
-  const countMap: Record<string, number> = {};
-  for (const m of allMembers ?? []) {
-    countMap[m.group_id] = (countMap[m.group_id] ?? 0) + 1;
-  }
+  // Member counts per group
+  const counts = await Promise.all(
+    groupIds.map(async (id) => {
+      const { count } = await admin
+        .from("study_group_members")
+        .select("*", { count: "exact", head: true })
+        .eq("group_id", id);
+      return { id, count: count ?? 0 };
+    }),
+  );
+  const countMap = Object.fromEntries(counts.map((c) => [c.id, c.count]));
   const roleMap  = Object.fromEntries(memberships.map((m) => [m.group_id, m.role]));
 
   const groups = (groupRows ?? []).map((g) => ({
