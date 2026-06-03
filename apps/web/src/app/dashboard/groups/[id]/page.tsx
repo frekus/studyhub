@@ -1953,10 +1953,18 @@ function ExamPredictionsTab({ groupId, currentUserId, members }: { groupId: stri
                 </DialogHeader>
                 <p className="mt-1 text-xs text-muted-foreground">Uploaded by {viewPaper.uploader_name}</p>
               </div>
-              <div className="flex-1 overflow-y-auto px-6 py-4" style={{ WebkitOverflowScrolling: "touch" }}>
-                <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
-                  {viewPaper.content || "No content available"}
-                </p>
+              <div className="flex-1 overflow-y-auto px-6 py-4 space-y-2" style={{ WebkitOverflowScrolling: "touch" }}>
+                {viewPaper.content
+                  ? viewPaper.content.split(/
+{2,}/).map((para, i) =>
+                      para.trim() ? (
+                        <ReactMarkdown key={i} className="text-sm leading-relaxed text-muted-foreground [&>p]:mb-0 [&>ul]:list-disc [&>ul]:pl-5 [&>ol]:list-decimal [&>ol]:pl-5 [&>li]:mb-0.5 [&>h1]:text-base [&>h1]:font-semibold [&>h2]:text-sm [&>h2]:font-semibold [&>strong]:text-foreground">
+                          {para.trim()}
+                        </ReactMarkdown>
+                      ) : null
+                    )
+                  : <p className="text-sm text-muted-foreground">No content available</p>
+                }
               </div>
             </DialogContent>
           </Dialog>

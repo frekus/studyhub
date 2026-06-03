@@ -86,6 +86,7 @@ interface Exam {
   status: "pending" | "ready" | "failed";
   predictions: Prediction[] | null;
   created_at: string;
+  content: string | null;
 }
 
 interface Group {
@@ -1287,6 +1288,7 @@ function PredictionsModal({ exam, onAskAI }: { exam: Exam; onAskAI?: (q: string)
 function ExamCard({ exam, onDelete, onAskAI }: { exam: Exam; onDelete: (id: string) => void; onAskAI?: (q: string) => void }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting]       = useState(false);
+  const [expanded, setExpanded]       = useState(false);
 
   async function handleConfirmDelete() {
     setDeleting(true);
@@ -1332,6 +1334,15 @@ function ExamCard({ exam, onDelete, onAskAI }: { exam: Exam; onDelete: (id: stri
               </div>
             )}
             {exam.status === "ready" && <PredictionsModal exam={exam} onAskAI={onAskAI} />}
+            {exam.content && (
+              <button
+                onClick={() => setExpanded(v => !v)}
+                title={expanded ? "Collapse" : "View paper"}
+                className="flex items-center justify-center h-7 w-7 rounded-full text-muted-foreground hover:bg-muted transition-colors"
+              >
+                {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </button>
+            )}
             <button
               onClick={() => setConfirmOpen(true)}
               title="Delete"
@@ -1342,6 +1353,16 @@ function ExamCard({ exam, onDelete, onAskAI }: { exam: Exam; onDelete: (id: stri
             </button>
           </div>
         </div>
+        {expanded && exam.content && (
+          <div className="mt-3 rounded-md border border-border/40 bg-muted/30 px-4 py-3 text-sm text-muted-foreground leading-relaxed space-y-2 max-h-96 overflow-y-auto">
+            {exam.content.split(/
+{2,}/).map((para, i) => (
+              para.trim() ? (
+                <ReactMarkdown key={i} className="[&>p]:mb-0 [&>ul]:list-disc [&>ul]:pl-5 [&>ol]:list-decimal [&>ol]:pl-5">{para.trim()}</ReactMarkdown>
+              ) : null
+            ))}
+          </div>
+        )}
       </div>
     </>
   );
