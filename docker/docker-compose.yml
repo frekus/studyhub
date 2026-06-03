@@ -24,7 +24,7 @@ services:
     image: rabbitmq:3-management-alpine
     environment:
       RABBITMQ_DEFAULT_USER: studyhub
-      RABBITMQ_DEFAULT_PASS: studyhub
+      RABBITMQ_DEFAULT_PASS: rmq2026secure
     ports:
       - "5672:5672"
       - "15672:15672"  # Management UI → http://localhost:15672
