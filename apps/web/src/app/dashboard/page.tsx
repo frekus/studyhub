@@ -1355,8 +1355,7 @@ function ExamCard({ exam, onDelete, onAskAI }: { exam: Exam; onDelete: (id: stri
         </div>
         {expanded && exam.content && (
           <div className="mt-3 rounded-md border border-border/40 bg-muted/30 px-4 py-3 text-sm text-muted-foreground leading-relaxed space-y-2 max-h-96 overflow-y-auto">
-            {exam.content.split(/
-{2,}/).map((para, i) => (
+            {exam.content.split(/\n{2,}/).map((para, i) => (
               para.trim() ? (
                 <ReactMarkdown key={i} className="[&>p]:mb-0 [&>ul]:list-disc [&>ul]:pl-5 [&>ol]:list-decimal [&>ol]:pl-5">{para.trim()}</ReactMarkdown>
               ) : null

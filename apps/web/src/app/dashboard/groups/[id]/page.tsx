@@ -1955,8 +1955,7 @@ function ExamPredictionsTab({ groupId, currentUserId, members }: { groupId: stri
               </div>
               <div className="flex-1 overflow-y-auto px-6 py-4 space-y-2" style={{ WebkitOverflowScrolling: "touch" }}>
                 {viewPaper.content
-                  ? viewPaper.content.split(/
-{2,}/).map((para, i) =>
+                  ? viewPaper.content.split(/\n{2,}/).map((para, i) =>
                       para.trim() ? (
                         <ReactMarkdown key={i} className="text-sm leading-relaxed text-muted-foreground [&>p]:mb-0 [&>ul]:list-disc [&>ul]:pl-5 [&>ol]:list-decimal [&>ol]:pl-5 [&>li]:mb-0.5 [&>h1]:text-base [&>h1]:font-semibold [&>h2]:text-sm [&>h2]:font-semibold [&>strong]:text-foreground">
                           {para.trim()}
