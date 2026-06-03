@@ -265,7 +265,10 @@ function SignupContent() {
           {/* Google OAuth */}
           <button
             type="button"
-            onClick={() => { window.location.href = "/api/auth/google"; }}
+            onClick={() => {
+              if (refCode.trim()) localStorage.setItem("pending_referral", refCode.trim());
+              window.location.href = "/api/auth/google";
+            }}
             className="flex w-full items-center justify-center gap-3 rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-medium transition-colors hover:bg-muted"
           >
             <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">

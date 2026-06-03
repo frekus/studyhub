@@ -1720,6 +1720,22 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
     void init();
   }, [router]);
 
+  // Redeem pending referral from Google OAuth flow
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("check_referral") !== "1") return;
+    const pending = localStorage.getItem("pending_referral");
+    if (!pending) return;
+    localStorage.removeItem("pending_referral");
+    url.searchParams.delete("check_referral");
+    window.history.replaceState({}, "", url.toString());
+    fetch("/api/referral/redeem", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: pending }),
+    }).catch(() => {});
+  }, []);
+
   // Close notifications dropdown on outside click
   useEffect(() => {
     if (!notifOpen) return;

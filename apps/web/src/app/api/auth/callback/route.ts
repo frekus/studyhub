@@ -41,5 +41,5 @@ export async function GET(request: NextRequest) {
     return Response.redirect(`${appUrl}/login?error=callback_failed`);
   }
 
-  return Response.redirect(`${appUrl}/dashboard`);
+  return Response.redirect(`${appUrl}/dashboard?check_referral=1`);
 }
