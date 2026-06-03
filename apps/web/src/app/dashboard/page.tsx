@@ -1686,6 +1686,7 @@ function DashboardPage({ initialTab }: { initialTab: "notes" | "groups" | "exams
           const j = await notifsRes.json() as { data?: { notifications: Notification[]; unread_count: number } };
           if (j.data) { setNotifications(j.data.notifications ?? []); setUnreadCount(j.data.unread_count ?? 0); }
         }
+        if (!localStorage.getItem("studyhub_onboarding_complete")) {
           setOnboardingOpen(true);
         }
       } catch {
